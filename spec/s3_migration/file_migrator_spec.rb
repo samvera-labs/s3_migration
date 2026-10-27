@@ -24,8 +24,11 @@ RSpec.describe S3Migration::FileMigrator do
   let(:dry_run) { false }
   let(:persister) { double('persister', save: nil) }
   let(:index_adapter) { double('index_adapter', save: nil) }
+  let(:watch) { instance_double(S3Migration::UploadWatch, discard_new: nil) }
 
   before do
+    allow(S3Migration::FileLock).to receive(:synchronize) { |_file_set_id, &block| block.call }
+    allow(S3Migration::UploadWatch).to receive(:new).and_return(watch)
     allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: dir))
     File.write(disk_file, content)
     s3_file = Valkyrie::StorageAdapter::File.new(id: uploaded.id, io: StringIO.new(s3_content))
@@ -200,6 +203,48 @@ RSpec.describe S3Migration::FileMigrator do
       expect(s3_storage).to have_received(:delete).with(id: uploaded.id)
       expect(persister).not_to have_received(:save)
       expect(manifest).not_to have_received(:delete)
+    end
+  end
+
+  describe 'locking' do
+    it 'holds the file set lock while it migrates' do
+      result
+
+      expect(S3Migration::FileLock).to have_received(:synchronize).with(file_set.id)
+    end
+
+    context 'when this is a dry run' do
+      let(:dry_run) { true }
+
+      it 'takes no lock' do
+        result
+
+        expect(S3Migration::FileLock).not_to have_received(:synchronize)
+      end
+    end
+
+    context 'when the lock cannot be had' do
+      before { allow(S3Migration::FileLock).to receive(:synchronize).and_raise(Hyrax::LockManager::UnableToAcquireLockError) }
+
+      it 'raises so the job retries, uploading nothing' do
+        expect { result }.to raise_error(Hyrax::LockManager::UnableToAcquireLockError)
+        expect(s3_storage).not_to have_received(:upload)
+      end
+    end
+  end
+
+  context 'when the upload itself fails' do
+    before { allow(s3_storage).to receive(:upload).and_raise(Valkyrie::Shrine::IntegrityError) }
+
+    it 'removes what the failed upload left in the bucket and raises' do
+      expect { result }.to raise_error(Valkyrie::Shrine::IntegrityError)
+      expect(watch).to have_received(:discard_new)
+    end
+
+    it 'still raises the original error when the bucket cannot be watched' do
+      allow(S3Migration::UploadWatch).to receive(:new).and_raise('cannot list')
+
+      expect { result }.to raise_error('cannot list')
     end
   end
 

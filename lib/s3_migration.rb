@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'valkyrie/shrine' # Shrine and the S3 adapter's errors are used here; do not rely on the app requiring them
 require 'zeitwerk'
 
 loader = Zeitwerk::Loader.for_gem

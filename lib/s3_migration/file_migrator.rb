@@ -26,7 +26,7 @@ module S3Migration
       return skipped if skipped
       return result(:would_migrate) if dry_run
 
-      migrate
+      FileLock.synchronize(file_set.id) { migrate }
     end
 
     private
@@ -89,9 +89,7 @@ module S3Migration
       uploaded = nil
       persisted = false
       disk_sha256 = disk_digests[:sha256]
-      uploaded = File.open(disk_path, 'rb') do |io|
-        s3_storage.upload(file: io, original_filename: filename, resource: file_set)
-      end
+      uploaded = upload_original
       return result(:mismatch, 'S3 copy does not match disk (size/SHA-256)') unless copy_matches?(uploaded, disk_sha256)
 
       current = Hyrax.query_service.find_by(id: original.id)
@@ -107,6 +105,17 @@ module S3Migration
       result(:migrated, nil, entry)
     ensure
       discard_upload(uploaded) if uploaded && !persisted
+    end
+
+    # The adapter checks the copy inside upload, so a failure there leaves an object under a key we never see.
+    def upload_original
+      watch = UploadWatch.new(s3_storage:, file_set_id: file_set.id)
+      File.open(disk_path, 'rb') do |io|
+        s3_storage.upload(file: io, original_filename: filename, resource: file_set)
+      end
+    rescue StandardError
+      watch&.discard_new
+      raise
     end
 
     def discard_upload(uploaded)

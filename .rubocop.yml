@@ -31,7 +31,7 @@ RSpec/MultipleExpectations:
   Max: 6
 # The migrator and quarantine specs build a lot of fixtures; the ceiling is what they use today.
 RSpec/MultipleMemoizedHelpers:
-  Max: 18
+  Max: 20
 # The doubles stand in for duck-typed Valkyrie and Hyrax objects; verify_partial_doubles covers the real ones.
 RSpec/VerifiedDoubles:
   Enabled: false
