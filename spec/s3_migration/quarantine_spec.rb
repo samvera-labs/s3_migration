@@ -36,6 +36,14 @@ RSpec.describe S3Migration::Quarantine do
     described_class.new(entry, apply:, base:, s3_storage:, **options)
   end
 
+  describe '.base_path' do
+    it 'is the base path of the source storage' do
+      allow(S3Migration::SourceStorage).to receive(:base_path).and_return('/data/files')
+
+      expect(described_class.base_path).to eq '/data/files'
+    end
+  end
+
   describe '#quarantine' do
     it 'dates the quarantined copy from the move, not from the original file' do
       File.utime(30.days.ago.to_time, 30.days.ago.to_time, disk_path)

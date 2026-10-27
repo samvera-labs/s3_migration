@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Moves one file set's original file from disk to S3. Unexpected errors are raised so the job retries;
-# verification failures (suspect, mismatch, ...) are logged and left on disk.
 module S3Migration
+  # Moves one file set's original file from disk to S3. Unexpected errors are raised so the job retries;
+  # verification failures (suspect, mismatch, ...) are logged and left on disk.
   class MigrateFileSetJob < ActiveJob::Base
     queue_as { ENV.fetch('S3_MIGRATION_QUEUE', 'default') }
     retry_on StandardError, wait: :polynomially_longer, attempts: 5

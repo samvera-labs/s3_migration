@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Enqueues a S3Migration::MigrateFileSetJob for every file set whose original is still on disk.
 module S3Migration
+  # Enqueues a MigrateFileSetJob for every file set whose original is still on disk.
   class MigrateFilesJob < ActiveJob::Base
     queue_as { ENV.fetch('S3_MIGRATION_QUEUE', 'default') }
 
