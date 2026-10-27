@@ -17,8 +17,7 @@ Gem::Specification.new do |spec|
   spec.required_ruby_version = '>= 3.2'
 
   spec.metadata = {
-    'homepage_uri' => spec.homepage,
-    'source_code_uri' => spec.homepage,
+    'source_code_uri' => "#{spec.homepage}/tree/main",
     'bug_tracker_uri' => "#{spec.homepage}/issues",
     'rubygems_mfa_required' => 'true'
   }
