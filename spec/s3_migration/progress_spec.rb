@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::Progress do
+RSpec.describe S3Migration::Progress do
   let(:out) { StringIO.new }
   let(:times) { [0.0, 10.0, 20.0, 3725.0] }
   let(:clock) { -> { times.shift || 3725.0 } }

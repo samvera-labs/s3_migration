@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration do
+RSpec.describe S3Migration do
   describe '.each_file_set' do
     def file_set(id)
       double("file set #{id}", id: Valkyrie::ID.new(id))
@@ -111,7 +111,7 @@ RSpec.describe Hyrax::S3Migration do
     end
 
     it 'ticks the progress reporter for every file set, including ones without an original' do
-      progress = instance_double(Hyrax::S3Migration::Progress, tick: nil)
+      progress = instance_double(S3Migration::Progress, tick: nil)
 
       described_class.each_original(progress:) { |_fs, _o| true }
 

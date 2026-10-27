@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Thin wrappers: the work lives in Hyrax::S3Migration::* and the MigrateFilesToS3Job /
-# MigrateFileSetToS3Job jobs. See documentation/migrating-files-to-s3.md.
+# Thin wrappers: the work lives in S3Migration::* and the S3Migration::MigrateFilesJob /
+# S3Migration::MigrateFileSetJob jobs. See documentation/migrating-files-to-s3.md.
 # rubocop:disable Metrics/BlockLength, Metrics/MethodLength, Metrics/AbcSize
 namespace :hyrax do
   namespace :migrate do
@@ -15,13 +15,13 @@ namespace :hyrax do
 
     def s3_migration_require_storage!
       s3_migration_require_s3!
-      Hyrax::S3Migration::SourceStorage.adapter
-    rescue Hyrax::S3Migration::SourceStorage::Unsupported => e
+      S3Migration::SourceStorage.adapter
+    rescue S3Migration::SourceStorage::Unsupported => e
       abort e.message
     end
 
     def s3_migration_each_original(counts, &)
-      progress = Hyrax::S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
+      progress = S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
       on_error = lambda do |file_set, error|
         counts[:no_original] += 1
         detail = if file_set.try(:file_ids).blank?
@@ -33,13 +33,13 @@ namespace :hyrax do
                  end
         puts "  NO_ORIGINAL #{file_set.id} - #{detail}"
       end
-      Hyrax::S3Migration.each_original(limit: ENV['LIMIT']&.to_i, progress:, on_error:, &)
+      S3Migration.each_original(limit: ENV['LIMIT']&.to_i, progress:, on_error:, &)
     end
 
     def s3_migration_inline(dry_run:)
       counts = Hash.new(0)
       s3_migration_each_original(counts) do |file_set, original|
-        result = Hyrax::S3Migration::FileMigrator.new(file_set:, original:, dry_run:).call
+        result = S3Migration::FileMigrator.new(file_set:, original:, dry_run:).call
         counts[result.status] += 1
         next false if result.status == :already_migrated
 
@@ -69,8 +69,8 @@ namespace :hyrax do
         puts "[DRY RUN] No changes will be made.\n\n" if dry_run
         s3_migration_inline(dry_run:)
       else
-        MigrateFilesToS3Job.perform_later(limit: ENV['LIMIT']&.to_i)
-        puts 'Enqueued MigrateFilesToS3Job'
+        S3Migration::MigrateFilesJob.perform_later(limit: ENV['LIMIT']&.to_i)
+        puts 'Enqueued S3Migration::MigrateFilesJob'
       end
     end
 
@@ -81,7 +81,7 @@ namespace :hyrax do
     task verify_s3_files: :environment do
       counts = Hash.new(0)
       s3_migration_each_original(counts) do |file_set, original|
-        result = Hyrax::S3Migration::Auditor.new(original:).call
+        result = S3Migration::Auditor.new(original:).call
         counts[result.status] += 1
         next false if result.status == :not_in_s3
 
@@ -98,17 +98,17 @@ namespace :hyrax do
     desc 'Read-only report of file storage by file use and scheme (disk, shrine, ...).'
     task report_file_storage: :environment do
       puts "use | scheme | files | GB"
-      Hyrax::S3Migration::StorageReport.call(progress: Hyrax::S3Migration::Progress.new).sort.each do |(use, scheme), (count, bytes)|
+      S3Migration::StorageReport.call(progress: S3Migration::Progress.new).sort.each do |(use, scheme), (count, bytes)|
         puts "#{use} | #{scheme} | #{count} | #{(bytes / 1e9).round(2)}"
       end
     end
 
     def s3_migration_run_quarantine(label, action)
       counts = Hash.new(0)
-      progress = Hyrax::S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
-      Hyrax::S3Migration::Manifest.new.each_entry do |entry|
+      progress = S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
+      S3Migration::Manifest.new.each_entry do |entry|
         progress.tick
-        quarantine = Hyrax::S3Migration::Quarantine.new(entry, apply: s3_migration_flag('APPLY'),
+        quarantine = S3Migration::Quarantine.new(entry, apply: s3_migration_flag('APPLY'),
                                                                verify_sha: s3_migration_flag('VERIFY_SHA', default: 'true'))
         status = quarantine.public_send(action)
         counts[status] += 1
@@ -146,7 +146,7 @@ namespace :hyrax do
       min_age_days = Float(ENV.fetch('MIN_AGE_DAYS', '14'), exception: false)
       abort "MIN_AGE_DAYS must be a positive number, got #{ENV['MIN_AGE_DAYS'].inspect}." unless min_age_days&.positive? && min_age_days.finite?
 
-      purged, kept = Hyrax::S3Migration::Quarantine.purge(apply:, min_age: min_age_days.days)
+      purged, kept = S3Migration::Quarantine.purge(apply:, min_age: min_age_days.days)
       puts "#{apply ? 'Deleted' : 'Would delete'}: #{purged}  Too recent: #{kept}"
     end
   end

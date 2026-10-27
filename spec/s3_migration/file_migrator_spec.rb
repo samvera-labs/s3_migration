@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::FileMigrator do
+RSpec.describe S3Migration::FileMigrator do
   let(:file_metadata) { Struct.new(:id, :file_identifier, :checksum, :original_filename, keyword_init: true) }
   let(:dir) { Dir.mktmpdir }
   let(:content) { 'original file bytes' }
@@ -16,7 +16,7 @@ RSpec.describe Hyrax::S3Migration::FileMigrator do
   let(:uploaded) { Struct.new(:id).new(Valkyrie::ID.new('shrine://fs1/uuid')) }
   let(:s3_content) { content }
   let(:s3_storage) { double('s3_storage', upload: uploaded, delete: nil) }
-  let(:manifest) { instance_double(Hyrax::S3Migration::Manifest, write: nil, delete: nil, read: nil) }
+  let(:manifest) { instance_double(S3Migration::Manifest, write: nil, delete: nil, read: nil) }
   let(:dry_run) { false }
   let(:persister) { double('persister', save: nil) }
   let(:index_adapter) { double('index_adapter', save: nil) }
@@ -26,7 +26,7 @@ RSpec.describe Hyrax::S3Migration::FileMigrator do
   end
 
   before do
-    allow(Hyrax::S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: dir))
+    allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: dir))
     File.write(disk_file, content)
     s3_file = Valkyrie::StorageAdapter::File.new(id: uploaded.id, io: StringIO.new(s3_content))
     allow(s3_storage).to receive(:find_by).with(id: uploaded.id).and_return(s3_file)

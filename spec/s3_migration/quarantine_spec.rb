@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::Quarantine do
+RSpec.describe S3Migration::Quarantine do
   let(:file_metadata) { Struct.new(:file_identifier) }
   let(:base) { Dir.mktmpdir }
   let(:content) { 'original bytes' }
@@ -15,14 +15,14 @@ RSpec.describe Hyrax::S3Migration::Quarantine do
   let(:s3_content) { content }
   let(:s3_file) { double('s3_file', size: s3_content.bytesize) }
   let(:s3_storage) { double('s3_storage', find_by: s3_file, delete: nil) }
-  let(:manifest) { instance_double(Hyrax::S3Migration::Manifest, read: { new_id: 'shrine://fs1/uuid' }, delete: nil) }
+  let(:manifest) { instance_double(S3Migration::Manifest, read: { new_id: 'shrine://fs1/uuid' }, delete: nil) }
   let(:apply) { true }
   let(:persister) { double('persister', save: nil) }
   let(:index_adapter) { double('index_adapter', save: nil) }
 
   before do
-    allow(Hyrax::S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: base))
-    allow(Hyrax::S3Migration::Manifest).to receive(:new).and_return(manifest)
+    allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: base))
+    allow(S3Migration::Manifest).to receive(:new).and_return(manifest)
     FileUtils.mkdir_p(File.dirname(disk_path))
     File.write(disk_path, content)
     allow(s3_file).to receive(:checksum) { |digests:| digests.map { |digest| digest.update(s3_content).to_s } }
@@ -202,7 +202,7 @@ RSpec.describe Hyrax::S3Migration::Quarantine do
     let(:old_file) { File.join(base, '.quarantine', 'old.bin') }
     let(:recent_file) { File.join(base, '.quarantine', 'sub', 'recent.bin') }
     let(:other_scope_file) { File.join(base, '.quarantine', 'other', 'theirs.bin') }
-    let(:manifest) { instance_double(Hyrax::S3Migration::Manifest, each_entry: entries.each) }
+    let(:manifest) { instance_double(S3Migration::Manifest, each_entry: entries.each) }
     let(:entries) do
       [{ old_id: "disk://#{base}/old.bin" }, { old_id: "disk://#{base}/sub/recent.bin" }, { old_id: 'disk:///elsewhere/x.bin' }]
     end
@@ -251,7 +251,7 @@ RSpec.describe Hyrax::S3Migration::Quarantine do
       FileUtils.mkdir_p(File.dirname(file))
       File.write(file, 'x')
       File.utime(30.days.ago.to_time, 30.days.ago.to_time, file)
-      odd_manifest = instance_double(Hyrax::S3Migration::Manifest, each_entry: [{ old_id: "disk://#{odd_base}/old.bin" }].each)
+      odd_manifest = instance_double(S3Migration::Manifest, each_entry: [{ old_id: "disk://#{odd_base}/old.bin" }].each)
 
       expect(described_class.purge(apply: true, min_age: 14.days, base: odd_base, manifest: odd_manifest)).to eq [1, 0]
       expect(File.exist?(file)).to be false

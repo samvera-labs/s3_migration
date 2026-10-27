@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::SourceStorage do
+RSpec.describe S3Migration::SourceStorage do
   let(:disk) { Valkyrie::Storage::Disk.new(base_path: '/data/files') }
 
   after { described_class.adapter_name = nil }

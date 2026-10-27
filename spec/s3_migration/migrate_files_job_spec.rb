@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe MigrateFilesToS3Job do
+RSpec.describe S3Migration::MigrateFilesJob do
   let(:file_sets) { %w[disk1 shrine disk2 none disk3].map { |id| double(id, id: Valkyrie::ID.new(id)) } }
   let(:originals) do
     {
@@ -13,23 +13,23 @@ RSpec.describe MigrateFilesToS3Job do
   end
 
   before do
-    allow(Hyrax::S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: '/'))
-    allow(Hyrax::S3Migration).to receive(:each_file_set) { |&block| file_sets.each(&block) }
+    allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: '/'))
+    allow(S3Migration).to receive(:each_file_set) { |&block| file_sets.each(&block) }
     allow(Hyrax.custom_queries).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
-    allow(MigrateFileSetToS3Job).to receive(:perform_later)
+    allow(S3Migration::MigrateFileSetJob).to receive(:perform_later)
   end
 
   it 'enqueues a job for each file set whose original is still on disk' do
     expect(described_class.perform_now).to eq 3
 
-    %w[disk1 disk2 disk3].each { |id| expect(MigrateFileSetToS3Job).to have_received(:perform_later).with(id) }
-    expect(MigrateFileSetToS3Job).not_to have_received(:perform_later).with('shrine')
+    %w[disk1 disk2 disk3].each { |id| expect(S3Migration::MigrateFileSetJob).to have_received(:perform_later).with(id) }
+    expect(S3Migration::MigrateFileSetJob).not_to have_received(:perform_later).with('shrine')
   end
 
   it 'stops at the limit' do
     expect(described_class.perform_now(limit: 2)).to eq 2
 
-    expect(MigrateFileSetToS3Job).to have_received(:perform_later).twice
+    expect(S3Migration::MigrateFileSetJob).to have_received(:perform_later).twice
   end
 
   it 'skips file sets that disappear while enumerating' do

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::Manifest do
+RSpec.describe S3Migration::Manifest do
   subject(:manifest) { described_class.new(storage:, scope:) }
 
   let(:storage) { double('s3 adapter', shrine:) }

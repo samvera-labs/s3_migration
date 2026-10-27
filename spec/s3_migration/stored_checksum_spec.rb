@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-RSpec.describe Hyrax::S3Migration::StoredChecksum do
+RSpec.describe S3Migration::StoredChecksum do
   def original_with(*checksums)
     double('original', checksum: checksums)
   end

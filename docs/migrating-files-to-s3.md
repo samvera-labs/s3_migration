@@ -6,7 +6,7 @@ Only originals move. Derivatives, uploads and similar stay on the shared storage
 
 ## Requirements
 
-- Originals are on a plain `Valkyrie::Storage::Disk` adapter (`disk://` ids), registered as `:disk`. If it is registered under another name, set `Hyrax::S3Migration::SourceStorage.adapter_name = :that_name`. Apps on a versioned disk adapter (`versiondisk://` ids, which `rails generate hyrax:install` sets up) or on Fedora are not supported: they keep file versions and deletion markers that a copy to S3 would lose. The tasks stop with a clear message in that case.
+- Originals are on a plain `Valkyrie::Storage::Disk` adapter (`disk://` ids), registered as `:disk`. If it is registered under another name, set `S3Migration::SourceStorage.adapter_name = :that_name`. Apps on a versioned disk adapter (`versiondisk://` ids, which `rails generate hyrax:install` sets up) or on Fedora are not supported: they keep file versions and deletion markers that a copy to S3 would lose. The tasks stop with a clear message in that case.
 - The destination is a [valkyrie-shrine](https://github.com/samvera/valkyrie-shrine) S3 adapter registered as `:repository_s3` (step 2).
 
 ## 1. Create the bucket
@@ -21,7 +21,7 @@ New files now get `shrine://` identifiers. Existing files keep working from disk
 
 ## 3. Migrate existing files
 
-`hyrax:migrate:files_to_s3` enqueues one background job per file set (`MigrateFilesToS3Job` lists the disk files, `MigrateFileSetToS3Job` moves each one), so speed scales with the number of job workers. Each job uploads the file, reads it back from S3 and compares its SHA-256 with the disk file, and only then switches the identifier; on a mismatch the upload is removed and the file stays on disk. The S3 adapter also verifies each upload on its own, comparing an MD5 of the source file with the object's ETag, which reads the source file one more time. Before uploading, the disk file is also checked against the checksum Hyrax recorded when the file was characterized (an MD5, optionally written as `urn:md5:`, `urn:sha1:` or `urn:sha256:`); a mismatch is reported as `suspect` and the file is not migrated. Transient errors retry. The disk copy is never touched, and the task can be re-run safely (migrated files are skipped).
+`hyrax:migrate:files_to_s3` enqueues one background job per file set (`S3Migration::MigrateFilesJob` lists the disk files, `S3Migration::MigrateFileSetJob` moves each one), so speed scales with the number of job workers. Each job uploads the file, reads it back from S3 and compares its SHA-256 with the disk file, and only then switches the identifier; on a mismatch the upload is removed and the file stays on disk. The S3 adapter also verifies each upload on its own, comparing an MD5 of the source file with the object's ETag, which reads the source file one more time. Before uploading, the disk file is also checked against the checksum Hyrax recorded when the file was characterized (an MD5, optionally written as `urn:md5:`, `urn:sha1:` or `urn:sha256:`); a mismatch is reported as `suspect` and the file is not migrated. Transient errors retry. The disk copy is never touched, and the task can be re-run safely (migrated files are skipped).
 
 Start with a dry run, which runs inline and prints what it would do. It reads every file to check checksums, so it takes a while on large repositories:
 
@@ -50,7 +50,7 @@ Things to know when running at scale:
 
 ### Applications that partition one repository (for example multitenant apps)
 
-The tasks work on the repository the app is currently pointed at, so run them once per partition with whatever mechanism your app has for that. If one bucket serves several partitions, set `Hyrax::S3Migration.scope_provider` to a callable returning a label for the current partition (for example in an initializer); manifest entries are then stored per label, so the quarantine and rollback steps only touch the current partition's files.
+The tasks work on the repository the app is currently pointed at, so run them once per partition with whatever mechanism your app has for that. If one bucket serves several partitions, set `S3Migration.scope_provider` to a callable returning a label for the current partition (for example in an initializer); manifest entries are then stored per label, so the quarantine and rollback steps only touch the current partition's files.
 
 ## 4. Verify
 
@@ -68,6 +68,6 @@ Every migrated file is recorded in a manifest object in the bucket (`_migration-
 2. `bundle exec rake hyrax:migrate:report_file_storage` lists what is still on disk by file use and storage scheme. The migration only moves originals; extracted text, other file versions and similar may still be `disk://` and are not covered by the manifest.
 3. Dry-run, then apply: `bundle exec rake hyrax:migrate:quarantine_disk_files` (add `APPLY=true`). For each file it re-checks that the database still points at the S3 id and that the S3 object matches the manifest size and SHA-256, then moves the disk copy to `<storage>/.quarantine` (a rename within the same volume).
 4. Soak (at least a week or two, through a backup cycle), re-checking the site. To undo, `bundle exec rake hyrax:migrate:rollback_s3_migration` (dry-run by default, `APPLY=true`) checks the disk copy against the manifest, restores it and the original identifier, then removes the S3 upload and manifest entry that are no longer used (bucket versioning keeps the removed object recoverable).
-5. Permanently delete: `bundle exec rake hyrax:migrate:purge_quarantine` (dry-run by default; `APPLY=true`, `MIN_AGE_DAYS=14`, which must be a positive number). Like every step above it works from the manifest: it deletes only the quarantined copies of files in the manifest scope it runs under (see `Hyrax::S3Migration.scope_provider`), and leaves anything else in `.quarantine`.
+5. Permanently delete: `bundle exec rake hyrax:migrate:purge_quarantine` (dry-run by default; `APPLY=true`, `MIN_AGE_DAYS=14`, which must be a positive number). Like every step above it works from the manifest: it deletes only the quarantined copies of files in the manifest scope it runs under (see `S3Migration.scope_provider`), and leaves anything else in `.quarantine`.
 
 Do a non-production environment first and production after, checking again between each. Storage is usually billed or provisioned by stored bytes, so the saving only appears after step 5 (and, on volumes you size by hand, after you shrink them). Derivatives often remain on the volume; size them separately. If your storage offers cheaper tiers for rarely read files, enabling them is a lower-risk way to cut cost while you work through the steps above.
