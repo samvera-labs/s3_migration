@@ -8,3 +8,7 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Rails 7.2 cannot use json 3 (see the comment in the Gemfile).
+      - dependency-name: json
+        update-types: ['version-update:semver-major']

@@ -9,7 +9,9 @@ gem 'hyrax', github: 'samvera/hyrax', branch: ENV['HYRAX_BRANCH'] if ENV['HYRAX_
 gem 'rails', "~> #{ENV['RAILS_VERSION']}.0" if ENV['RAILS_VERSION']
 
 group :development, :test do
-  gem 'json', '< 3' # Valkyrie's old migrations pass JSON.generate a quirks_mode that json 3 removed
+  # Rails 7.2's JSON encoder passes JSON.generate a quirks_mode option that json 3 removed, so every to_json raises.
+  # Drop this when the matrix moves to a Rails that supports json 3.
+  gem 'json', '< 3'
   gem 'pg'
   gem 'pry'
   gem 'rake'
