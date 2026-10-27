@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 RSpec.describe S3Migration::FileMigrator do
+  subject(:result) do
+    described_class.new(file_set:, original:, dry_run:, s3_storage:, manifest:).call
+  end
+
   let(:file_metadata) { Struct.new(:id, :file_identifier, :checksum, :original_filename, keyword_init: true) }
   let(:dir) { Dir.mktmpdir }
   let(:content) { 'original file bytes' }
@@ -20,10 +24,6 @@ RSpec.describe S3Migration::FileMigrator do
   let(:dry_run) { false }
   let(:persister) { double('persister', save: nil) }
   let(:index_adapter) { double('index_adapter', save: nil) }
-
-  subject(:result) do
-    described_class.new(file_set:, original:, dry_run:, s3_storage:, manifest:).call
-  end
 
   before do
     allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: dir))
@@ -239,7 +239,11 @@ RSpec.describe S3Migration::FileMigrator do
 
     context 'when the database cannot be read afterwards' do
       before do
-        allow(Hyrax.query_service).to receive(:find_by).with(id: original.id).and_invoke(->(**) { current }, ->(**) { raise 'still down' })
+        allow(Hyrax.query_service).to receive(:find_by).with(id: original.id).and_invoke(lambda { |**|
+          current
+        }, lambda { |**|
+             raise 'still down'
+           })
       end
 
       it 'raises the original error and keeps the upload and the manifest entry' do

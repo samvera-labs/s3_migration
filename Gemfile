@@ -5,8 +5,8 @@ source 'https://rubygems.org'
 gemspec
 
 # CI sets these to test other versions: RAILS_VERSION=7.2, HYRAX_BRANCH=main.
-gem 'rails', "~> #{ENV['RAILS_VERSION']}.0" if ENV['RAILS_VERSION']
 gem 'hyrax', github: 'samvera/hyrax', branch: ENV['HYRAX_BRANCH'] if ENV['HYRAX_BRANCH']
+gem 'rails', "~> #{ENV['RAILS_VERSION']}.0" if ENV['RAILS_VERSION']
 
 group :development, :test do
   gem 'json', '< 3' # Valkyrie's old migrations pass JSON.generate a quirks_mode that json 3 removed

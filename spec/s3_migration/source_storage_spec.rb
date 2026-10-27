@@ -20,16 +20,23 @@ RSpec.describe S3Migration::SourceStorage do
     end
 
     it 'refuses a versioned disk adapter' do
-      allow(Valkyrie::StorageAdapter).to receive(:find).with(:disk).and_return(Valkyrie::Storage::VersionedDisk.new(base_path: '/data/files'))
+      versioned = Valkyrie::Storage::VersionedDisk.new(base_path: '/data/files')
+      allow(Valkyrie::StorageAdapter).to receive(:find).with(:disk).and_return(versioned)
 
-      expect { described_class.adapter }.to raise_error(described_class::Unsupported, /Valkyrie::Storage::VersionedDisk.*Only Valkyrie::Storage::Disk/)
+      expect do
+        described_class.adapter
+      end.to raise_error(described_class::Unsupported, /Valkyrie::Storage::VersionedDisk.*Only Valkyrie::Storage::Disk/)
     end
 
     it 'names the registered adapters when there is none under the configured name' do
       allow(Valkyrie::StorageAdapter).to receive(:find).and_raise(Valkyrie::StorageAdapter::AdapterNotFoundError)
-      allow(Valkyrie::StorageAdapter).to receive(:storage_adapters).and_return(versioned_disk_storage: nil, fedora_storage: nil)
+      allow(Valkyrie::StorageAdapter).to receive(:storage_adapters).and_return(versioned_disk_storage: nil,
+                                                                               fedora_storage: nil)
 
-      expect { described_class.adapter }.to raise_error(described_class::Unsupported, /:disk.*versioned_disk_storage, fedora_storage.*adapter_name/)
+      expect do
+        described_class.adapter
+      end.to raise_error(described_class::Unsupported,
+                         /:disk.*versioned_disk_storage, fedora_storage.*adapter_name/)
     end
   end
 

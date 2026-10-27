@@ -6,8 +6,8 @@ RSpec.describe S3Migration::StoredChecksum do
   end
 
   let(:md5) { Digest::MD5.hexdigest('x') }
-  let(:sha1) { Digest::SHA1.hexdigest('x') }
-  let(:sha256) { Digest::SHA256.hexdigest('x') }
+  let(:sha1_hex) { Digest::SHA1.hexdigest('x') }
+  let(:sha256_hex) { Digest::SHA256.hexdigest('x') }
 
   it 'reads a bare hex string as the MD5 that FITS records' do
     stored = described_class.for(original_with(md5))
@@ -16,8 +16,8 @@ RSpec.describe S3Migration::StoredChecksum do
   end
 
   it 'understands an explicit urn prefix, in any case' do
-    expect(described_class.for(original_with("urn:sha1:#{sha1}")).digest_class).to eq Digest::SHA1
-    expect(described_class.for(original_with("URN:SHA256:#{sha256.upcase}")).digest).to eq sha256
+    expect(described_class.for(original_with("urn:sha1:#{sha1_hex}")).digest_class).to eq Digest::SHA1
+    expect(described_class.for(original_with("URN:SHA256:#{sha256_hex.upcase}")).digest).to eq sha256_hex
   end
 
   it 'has a readable string form' do

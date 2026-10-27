@@ -5,7 +5,9 @@ module S3Migration
   # signs of life, how fast they are going, and what they have found so far.
   class Progress
     # @param detail [#call, nil] returns extra text for each line, e.g. running counts
-    def initialize(every: ENV.fetch('PROGRESS_EVERY', 500).to_i, out: $stdout, detail: nil, clock: -> { Process.clock_gettime(Process::CLOCK_MONOTONIC) })
+    def initialize(every: ENV.fetch('PROGRESS_EVERY', 500).to_i, out: $stdout, detail: nil, clock: lambda {
+      Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    })
       @every = every
       @out = out
       @detail = detail
@@ -23,7 +25,9 @@ module S3Migration
 
     def report
       elapsed = @clock.call - @started
-      line = format('  ... %d examined (%.1f/s, %s elapsed)', @count, @count / [elapsed, 0.001].max, duration(elapsed))
+      rate = @count / [elapsed, 0.001].max
+      line = format('  ... %<count>d examined (%<rate>.1f/s, %<elapsed>s elapsed)',
+                    count: @count, rate:, elapsed: duration(elapsed))
       line += "  #{@detail.call}" if @detail
       @out.puts(line)
       @out.flush
@@ -32,7 +36,9 @@ module S3Migration
     def duration(seconds)
       minutes, secs = seconds.to_i.divmod(60)
       hours, minutes = minutes.divmod(60)
-      hours.positive? ? format('%d:%02d:%02d', hours, minutes, secs) : format('%d:%02d', minutes, secs)
+      return format('%<hours>d:%<minutes>02d:%<secs>02d', hours:, minutes:, secs:) if hours.positive?
+
+      format('%<minutes>d:%<secs>02d', minutes:, secs:)
     end
   end
 end

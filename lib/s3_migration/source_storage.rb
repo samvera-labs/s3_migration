@@ -20,8 +20,8 @@ module S3Migration
         found = Valkyrie::StorageAdapter.find(adapter_name)
         return found if found.is_a?(Valkyrie::Storage::Disk)
 
-        raise Unsupported, "The :#{adapter_name} storage adapter is a #{found.class}. Only Valkyrie::Storage::Disk (disk:// ids) " \
-                           'can be migrated; see documentation/migrating-files-to-s3.md.'
+        raise Unsupported, "The :#{adapter_name} storage adapter is a #{found.class}. Only Valkyrie::Storage::Disk " \
+                           '(disk:// ids) can be migrated; see docs/migrating-files-to-s3.md.'
       rescue Valkyrie::StorageAdapter::AdapterNotFoundError
         raise Unsupported, "No Valkyrie storage adapter is registered as :#{adapter_name} (registered: " \
                            "#{Valkyrie::StorageAdapter.storage_adapters.keys.join(', ')}). Set " \

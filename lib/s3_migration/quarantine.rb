@@ -133,9 +133,11 @@ module S3Migration
 
     # The rollback has already succeeded, so a failure here only leaves an unused upload behind.
     def discard_upload
-      UploadCleanup.new(file_set_id: entry[:file_set_id], file_metadata_id: entry[:file_metadata_id], s3_storage:, manifest:).call(entry[:new_id])
+      UploadCleanup.new(file_set_id: entry[:file_set_id], file_metadata_id: entry[:file_metadata_id], s3_storage:,
+                        manifest:).call(entry[:new_id])
     rescue StandardError => e
-      Hyrax.logger.warn("S3Migration: rolled back #{entry[:file_set_id]} but could not remove #{entry[:new_id]}: #{e.class}: #{e.message}")
+      Hyrax.logger.warn("S3Migration: rolled back #{entry[:file_set_id]} but could not remove " \
+                        "#{entry[:new_id]}: #{e.class}: #{e.message}")
     end
   end
 end

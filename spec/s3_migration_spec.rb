@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 RSpec.describe S3Migration do
+  it 'has a semantic version' do
+    expect(S3Migration::VERSION).to match(/\A\d+\.\d+\.\d+\z/)
+  end
+
   describe '.each_file_set' do
     def file_set(id)
       double("file set #{id}", id: Valkyrie::ID.new(id))
@@ -21,7 +25,8 @@ RSpec.describe S3Migration do
 
       it 'asks the inner service for every registered file set class, not just the Valkyrie one' do
         allow(postgres).to receive(:find_all_of_model).with(model: Hyrax::FileSet).and_return([])
-        allow(postgres).to receive(:find_all_of_model).with(model: legacy_class).and_return([file_set('a'), file_set('b')])
+        allow(postgres).to receive(:find_all_of_model).with(model: legacy_class).and_return([file_set('a'),
+                                                                                             file_set('b')])
 
         expect(described_class.each_file_set.map { |fs| fs.id.to_s }).to eq %w[a b]
       end
@@ -33,8 +38,8 @@ RSpec.describe S3Migration do
       end
 
       it 'skips Wings query services, which read file sets from Fedora' do
-        skip 'Wings is not loaded' unless defined?(Wings::Valkyrie::QueryService)
-        wings = Wings::Valkyrie::QueryService.allocate
+        stub_const('Wings::Valkyrie::QueryService', Class.new { def find_all_of_model(model:) = [model] })
+        wings = Wings::Valkyrie::QueryService.new
         allow(wings).to receive(:find_all_of_model).and_raise('Wings should not be queried')
         allow(composite).to receive(:services).and_return([wings, postgres])
         allow(postgres).to receive(:find_all_of_model).and_return([file_set('a')])
@@ -81,7 +86,9 @@ RSpec.describe S3Migration do
       errors = []
       seen = []
 
-      described_class.each_original(on_error: ->(file_set, error) { errors << [file_set.id.to_s, error.class] }) { |file_set, _| seen << file_set.id.to_s }
+      described_class.each_original(on_error: lambda { |file_set, error|
+        errors << [file_set.id.to_s, error.class]
+      }) { |file_set, _| seen << file_set.id.to_s }
 
       expect(errors).to eq [['a', Valkyrie::Persistence::ObjectNotFoundError]]
       expect(seen).to eq %w[c d]

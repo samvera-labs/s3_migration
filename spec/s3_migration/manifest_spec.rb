@@ -13,7 +13,8 @@ RSpec.describe S3Migration::Manifest do
     it 'stores one JSON object per file set through the storage adapter' do
       manifest.write(entry)
 
-      expect(shrine).to have_received(:upload).with(an_object_having_attributes(string: entry.to_json), '_migration-manifests/fs1.json')
+      expect(shrine).to have_received(:upload).with(an_object_having_attributes(string: entry.to_json),
+                                                    '_migration-manifests/fs1.json')
     end
 
     context 'with a scope' do
@@ -76,7 +77,8 @@ RSpec.describe S3Migration::Manifest do
       let(:shrine) { double('shrine s3 storage', prefix: 'repo', bucket:) }
 
       it 'lists only that scope, under the storage prefix' do
-        allow(bucket).to receive(:objects).with(prefix: 'repo/_migration-manifests/one.example.com/').and_return(objects)
+        allow(bucket).to receive(:objects).with(prefix: 'repo/_migration-manifests/one.example.com/')
+                                          .and_return(objects)
 
         expect(manifest.each_entry.to_a.size).to eq 2
       end

@@ -58,7 +58,8 @@ RSpec.describe S3Migration::Tasks do
 
     it 'stops when the source storage is not supported' do
       allow(Valkyrie::StorageAdapter).to receive(:storage_adapters).and_return(repository_s3: double('s3'))
-      allow(S3Migration::SourceStorage).to receive(:adapter).and_raise(S3Migration::SourceStorage::Unsupported, 'versioned disk')
+      allow(S3Migration::SourceStorage).to receive(:adapter).and_raise(S3Migration::SourceStorage::Unsupported,
+                                                                       'versioned disk')
 
       expect { tasks.migrate }.to raise_error(described_class::Abort, 'versioned disk')
     end
@@ -104,7 +105,9 @@ RSpec.describe S3Migration::Tasks do
       it 'reports an error and carries on' do
         env['INLINE'] = 'true'
         each_original_yields([file_set, original])
-        allow(S3Migration::FileMigrator).to receive(:new).and_return(double('migrator').tap { |m| allow(m).to receive(:call).and_raise('boom') })
+        allow(S3Migration::FileMigrator).to receive(:new).and_return(double('migrator').tap { |m|
+          allow(m).to receive(:call).and_raise('boom')
+        })
 
         tasks.migrate
 
@@ -143,15 +146,18 @@ RSpec.describe S3Migration::Tasks do
     let(:crashing) { double('crashing') }
 
     def audit(result = nil, raises: nil)
-      auditor = double('auditor')
-      raises ? allow(auditor).to(receive(:call).and_raise(raises)) : allow(auditor).to(receive(:call).and_return(result))
-      auditor
+      double('auditor').tap do |auditor|
+        allow(auditor).to receive(:call) { raises ? raise(raises) : result }
+      end
     end
 
     it 'counts what it finds and prints the problems' do
       each_original_yields([file_set, fine], [file_set, broken], [file_set, elsewhere], [file_set, crashing])
       auditors = { fine => audit(S3Migration::Auditor::Result.new(status: :ok, problems: [])),
-                   broken => audit(S3Migration::Auditor::Result.new(status: :problem, problems: ['size differs', 'no object'])),
+                   broken => audit(S3Migration::Auditor::Result.new(status: :problem,
+                                                                    problems: [
+                                                                      'size differs', 'no object'
+                                                                    ])),
                    elsewhere => audit(S3Migration::Auditor::Result.new(status: :not_in_s3, problems: [])),
                    crashing => audit(raises: 'boom') }
       allow(S3Migration::Auditor).to receive(:new) { |original:| auditors.fetch(original) }
@@ -166,11 +172,12 @@ RSpec.describe S3Migration::Tasks do
   describe '#report' do
     it 'prints a row per use and scheme, sorted, with gigabytes' do
       allow(S3Migration::StorageReport).to receive(:call).and_return(%w[ThumbnailImage disk] => [3, 500_000_000],
-                                                                    %w[OriginalFile shrine] => [2, 3_000_000_000])
+                                                                     %w[OriginalFile shrine] => [2, 3_000_000_000])
 
       tasks.report
 
-      expect(output.lines.map(&:chomp)).to eq ['use | scheme | files | GB', 'OriginalFile | shrine | 2 | 3.0', 'ThumbnailImage | disk | 3 | 0.5']
+      expect(output.lines.map(&:chomp)).to eq ['use | scheme | files | GB', 'OriginalFile | shrine | 2 | 3.0',
+                                               'ThumbnailImage | disk | 3 | 0.5']
     end
   end
 
@@ -192,7 +199,8 @@ RSpec.describe S3Migration::Tasks do
       tasks.public_send(action)
 
       expect(output).to include('[DRY RUN]')
-      expect(S3Migration::Quarantine).to have_received(:new).with(anything, apply: false, verify_sha: true).exactly(3).times
+      expect(S3Migration::Quarantine).to have_received(:new).with(anything, apply: false,
+                                                                            verify_sha: true).exactly(3).times
     end
 
     it 'passes APPLY and VERIFY_SHA on' do
@@ -201,7 +209,8 @@ RSpec.describe S3Migration::Tasks do
       tasks.public_send(action)
 
       expect(output).not_to include('[DRY RUN]')
-      expect(S3Migration::Quarantine).to have_received(:new).with(anything, apply: true, verify_sha: false).exactly(3).times
+      expect(S3Migration::Quarantine).to have_received(:new).with(anything, apply: true,
+                                                                            verify_sha: false).exactly(3).times
     end
 
     it 'prints the files it acted on and tallies every outcome' do

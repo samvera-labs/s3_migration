@@ -11,3 +11,27 @@ AllCops:
     - spec/internal/**/*
     - vendor/**/*
     - tmp/**/*
+
+# Ceilings set from the current code; lower them as methods are refactored.
+Metrics/MethodLength:
+  Max: 20
+Metrics/AbcSize:
+  Max: 32
+Metrics/ClassLength:
+  Max: 150
+Metrics/BlockLength:
+  Exclude:
+    - spec/**/*
+    - s3_migration.gemspec
+    - lib/tasks/*.rake
+
+RSpec/ExampleLength:
+  Max: 20
+RSpec/MultipleExpectations:
+  Max: 6
+# The migrator and quarantine specs build a lot of fixtures; the ceiling is what they use today.
+RSpec/MultipleMemoizedHelpers:
+  Max: 18
+# The doubles stand in for duck-typed Valkyrie and Hyrax objects; verify_partial_doubles covers the real ones.
+RSpec/VerifiedDoubles:
+  Enabled: false

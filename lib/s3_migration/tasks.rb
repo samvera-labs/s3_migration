@@ -6,6 +6,8 @@ module S3Migration
     # Raised where a task should stop with a message instead of running.
     class Abort < StandardError; end
 
+    ACTED_ON = %i[quarantined rolled_back].freeze
+
     # Runs one task for its rake wrapper, turning an Abort into a rake abort.
     def self.run(name)
       new.public_send(name)
@@ -41,7 +43,8 @@ module S3Migration
         out.puts "  PROBLEM #{file_set.id} - #{e.class}: #{e.message}"
         true
       end
-      out.puts "\nOK: #{counts[:ok]}  Problems: #{counts[:problem]}  Not yet in S3: #{counts[:not_in_s3]}  No original: #{counts[:no_original]}"
+      out.puts "\nOK: #{counts[:ok]}  Problems: #{counts[:problem]}  " \
+               "Not yet in S3: #{counts[:not_in_s3]}  No original: #{counts[:no_original]}"
     end
 
     def report
@@ -85,13 +88,19 @@ module S3Migration
 
     def min_age_days
       days = Float(env.fetch('MIN_AGE_DAYS', '14'), exception: false)
-      raise Abort, "MIN_AGE_DAYS must be a positive number, got #{env['MIN_AGE_DAYS'].inspect}." unless days&.positive? && days.finite?
+      unless days&.positive? && days.finite?
+        raise Abort,
+              "MIN_AGE_DAYS must be a positive number, got #{env['MIN_AGE_DAYS'].inspect}."
+      end
 
       days
     end
 
     def require_storage!
-      raise Abort, 'Set up the :repository_s3 Valkyrie storage adapter first (see docs/migrating-files-to-s3.md).' unless Valkyrie::StorageAdapter.storage_adapters.key?(:repository_s3)
+      unless Valkyrie::StorageAdapter.storage_adapters.key?(:repository_s3)
+        raise Abort,
+              'Set up the :repository_s3 Valkyrie storage adapter first (see docs/migrating-files-to-s3.md).'
+      end
 
       SourceStorage.adapter
     rescue SourceStorage::Unsupported => e
@@ -149,9 +158,10 @@ module S3Migration
       progress = Progress.new(detail: -> { tally(counts) })
       Manifest.new.each_entry do |entry|
         progress.tick
-        status = Quarantine.new(entry, apply: flag('APPLY'), verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
+        status = Quarantine.new(entry, apply: flag('APPLY'),
+                                       verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
         counts[status] += 1
-        out.puts "  #{label} #{entry[:file_set_id]}" if %i[quarantined rolled_back].include?(status)
+        out.puts "  #{label} #{entry[:file_set_id]}" if ACTED_ON.include?(status)
       rescue StandardError => e
         counts[:error] += 1
         out.puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"

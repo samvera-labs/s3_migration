@@ -89,11 +89,16 @@ module S3Migration
       uploaded = nil
       persisted = false
       disk_sha256 = disk_digests[:sha256]
-      uploaded = File.open(disk_path, 'rb') { |io| s3_storage.upload(file: io, original_filename: filename, resource: file_set) }
+      uploaded = File.open(disk_path, 'rb') do |io|
+        s3_storage.upload(file: io, original_filename: filename, resource: file_set)
+      end
       return result(:mismatch, 'S3 copy does not match disk (size/SHA-256)') unless copy_matches?(uploaded, disk_sha256)
 
       current = Hyrax.query_service.find_by(id: original.id)
-      return result(:raced, 'already migrated by another process') unless SourceStorage.handles?(current.file_identifier)
+      unless SourceStorage.handles?(current.file_identifier)
+        return result(:raced,
+                      'already migrated by another process')
+      end
 
       entry = build_entry(uploaded, disk_sha256)
       manifest.write(entry)
@@ -105,7 +110,8 @@ module S3Migration
     end
 
     def discard_upload(uploaded)
-      UploadCleanup.new(file_set_id: file_set.id, file_metadata_id: original.id, s3_storage:, manifest:).call(uploaded.id)
+      UploadCleanup.new(file_set_id: file_set.id, file_metadata_id: original.id, s3_storage:,
+                        manifest:).call(uploaded.id)
     end
 
     def copy_matches?(uploaded, disk_sha256)

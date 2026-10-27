@@ -34,12 +34,14 @@ namespace :s3_migration do
     S3Migration::Tasks.run(:quarantine)
   end
 
-  desc 'Undo a migration from the manifest (restores the disk copy and id, removes the unused upload). Dry run unless APPLY=true.'
+  desc 'Undo a migration from the manifest (restores the disk copy and id, removes the unused upload). ' \
+       'Dry run unless APPLY=true.'
   task rollback: :environment do
     S3Migration::Tasks.run(:rollback)
   end
 
-  desc 'Permanently delete the quarantined copies of manifested files older than MIN_AGE_DAYS (default 14). Dry run unless APPLY=true.'
+  desc 'Permanently delete the quarantined copies of manifested files older than MIN_AGE_DAYS (default 14). ' \
+       'Dry run unless APPLY=true.'
   task purge: :environment do
     S3Migration::Tasks.run(:purge)
   end

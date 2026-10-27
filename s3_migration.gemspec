@@ -9,8 +9,9 @@ Gem::Specification.new do |spec|
   spec.email = ['max@notch8.com']
 
   spec.summary = 'Move Hyrax original files from disk storage to S3, verified and reversible.'
-  spec.description = 'Rake tasks and jobs that copy original files from a Valkyrie disk storage adapter to an S3 (valkyrie-shrine) ' \
-                     'adapter, verify every copy, then quarantine, roll back or purge the disk copies from a manifest.'
+  spec.description = 'Rake tasks and jobs that copy original files from a Valkyrie disk storage adapter to an S3 ' \
+                     '(valkyrie-shrine) adapter, verify every copy, then quarantine, roll back or purge the disk ' \
+                     'copies from a manifest.'
   spec.homepage = 'https://github.com/samvera-labs/s3_migration'
   spec.license = 'MIT'
   spec.required_ruby_version = '>= 3.2'

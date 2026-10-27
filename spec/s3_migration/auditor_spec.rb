@@ -31,7 +31,7 @@ RSpec.describe S3Migration::Auditor do
 
     it 'reports the size problem' do
       expect(result.status).to eq :problem
-      expect(result.problems.first).to match(/size/)
+      expect(result.problems.first).to include('size')
     end
   end
 
@@ -40,7 +40,7 @@ RSpec.describe S3Migration::Auditor do
 
     it 'reports the checksum problem' do
       expect(result.status).to eq :problem
-      expect(result.problems.first).to match(/md5/)
+      expect(result.problems.first).to include('md5')
     end
   end
 
