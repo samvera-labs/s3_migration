@@ -44,8 +44,7 @@ The tasks work on whichever repository the app is pointed at, so run them once p
 The specs run in a small Rails app under `spec/internal` that boots Hyrax with the Postgres Valkyrie adapter. It needs only a Postgres database, not Fedora, Solr or Redis.
 
 ```bash
-createdb s3_migration_test   # or point DATABASE_URL at any empty Postgres database
-bundle install
+bundle install               # the specs create the database if it is missing; set DATABASE_URL to use another Postgres
 bundle exec rspec            # fails below 100% line coverage
 bundle exec rubocop
 ```

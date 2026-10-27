@@ -11,6 +11,13 @@ end
 ENV['RAILS_ENV'] = 'test'
 require_relative 'internal/config/environment'
 
+begin
+  ActiveRecord::Base.connection.verify!
+rescue ActiveRecord::NoDatabaseError # a fresh Postgres, such as CI's service container, has only its default database
+  ActiveRecord::Tasks::DatabaseTasks.create(ActiveRecord::Base.configurations.configs_for(env_name: 'test').first)
+  ActiveRecord::Base.establish_connection
+end
+
 ActiveRecord::Schema.verbose = false
 load Rails.root.join('db/schema.rb') unless ActiveRecord::Base.connection.table_exists?(:orm_resources)
 
