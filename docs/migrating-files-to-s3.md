@@ -7,7 +7,8 @@ Only originals move. Derivatives, uploads and similar stay on the shared storage
 ## Requirements
 
 - Originals are on a plain `Valkyrie::Storage::Disk` adapter (`disk://` ids), registered as `:disk`. If it is registered under another name, set `S3Migration::SourceStorage.adapter_name = :that_name`. Apps on a versioned disk adapter (`versiondisk://` ids, which `rails generate hyrax:install` sets up) or on Fedora are not supported: they keep file versions and deletion markers that a copy to S3 would lose. The tasks stop with a clear message in that case.
-- The destination is a [valkyrie-shrine](https://github.com/samvera/valkyrie-shrine) S3 adapter registered as `:repository_s3` (step 2).
+- A Hyrax 5 application on Rails 7. The tasks read file sets and their original files through `Hyrax.query_service` and `Hyrax.custom_queries`, so Valkyrie must be the metadata layer (Wings-only apps are not covered).
+- The destination is a [valkyrie-shrine](https://github.com/samvera-labs/valkyrie-shrine) S3 adapter registered as `:repository_s3` (step 2).
 
 ## 1. Create the bucket
 
