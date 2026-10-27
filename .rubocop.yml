@@ -1,0 +1,13 @@
+plugins:
+  - rubocop-performance
+  - rubocop-rake
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.2
+  NewCops: enable
+  SuggestExtensions: false
+  Exclude:
+    - spec/internal/**/*
+    - vendor/**/*
+    - tmp/**/*

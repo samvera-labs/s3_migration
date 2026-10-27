@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - run: bundle exec rubocop
+
+  test:
+    name: test (ruby ${{ matrix.ruby }}, rails ${{ matrix.rails }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.2', '3.3', '3.4']
+        rails: ['7.2']
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/s3_migration_test
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      # SimpleCov's minimum_coverage (100% of lines) fails this step when coverage drops.
+      - run: bundle exec rspec
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: coverage-ruby-${{ matrix.ruby }}-rails-${{ matrix.rails }}
+          path: coverage/
+
+  build:
+    name: gem build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+      - run: gem build s3_migration.gemspec
