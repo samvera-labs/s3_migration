@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+require 'zeitwerk'
+
+loader = Zeitwerk::Loader.for_gem
+loader.ignore("#{__dir__}/tasks")
+loader.setup
+
 # Moves original files from the disk storage adapter to the S3 repository adapter
 # (see docs/migrating-files-to-s3.md).
 module S3Migration
@@ -64,3 +70,5 @@ module S3Migration
     end
   end
 end
+
+require 's3_migration/railtie' if defined?(Rails::Railtie)

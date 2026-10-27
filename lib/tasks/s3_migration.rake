@@ -1,154 +1,46 @@
 # frozen_string_literal: true
 
-# Thin wrappers: the work lives in S3Migration::* and the S3Migration::MigrateFilesJob /
-# S3Migration::MigrateFileSetJob jobs. See documentation/migrating-files-to-s3.md.
-# rubocop:disable Metrics/BlockLength, Metrics/MethodLength, Metrics/AbcSize
-namespace :hyrax do
-  namespace :migrate do
-    def s3_migration_flag(name, default: 'false')
-      ActiveModel::Type::Boolean.new.cast(ENV.fetch(name, default))
-    end
+# Thin wrappers: the work lives in S3Migration::Tasks. See docs/migrating-files-to-s3.md.
+namespace :s3_migration do
+  desc <<~DESC
+    Move original files from the plain disk storage adapter (disk:// ids) to the :repository_s3 adapter. By default this
+    enqueues jobs (one per file set; set S3_MIGRATION_QUEUE to use a dedicated queue). Each upload is
+    verified by SHA-256 read-back, and against the stored characterization checksum, before the identifier
+    is switched; the disk copy is never touched.
+    Env: DRY_RUN=true runs inline and only reports; INLINE=true runs inline for real; LIMIT=<n> files.
+  DESC
+  task migrate: :environment do
+    S3Migration::Tasks.run(:migrate)
+  end
 
-    def s3_migration_require_s3!
-      abort 'Set up the :repository_s3 Valkyrie storage adapter first (see documentation/migrating-files-to-s3.md).' unless Valkyrie::StorageAdapter.storage_adapters.key?(:repository_s3)
-    end
+  desc <<~DESC
+    Read-only audit of originals already in S3: object readable, recorded size and stored checksum match.
+    Get zero problems before deleting anything from disk. Env: LIMIT=<n> files.
+  DESC
+  task verify: :environment do
+    S3Migration::Tasks.run(:verify)
+  end
 
-    def s3_migration_require_storage!
-      s3_migration_require_s3!
-      S3Migration::SourceStorage.adapter
-    rescue S3Migration::SourceStorage::Unsupported => e
-      abort e.message
-    end
+  desc 'Read-only report of file storage by file use and scheme (disk, shrine, ...).'
+  task report: :environment do
+    S3Migration::Tasks.run(:report)
+  end
 
-    def s3_migration_each_original(counts, &)
-      progress = S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
-      on_error = lambda do |file_set, error|
-        counts[:no_original] += 1
-        detail = if file_set.try(:file_ids).blank?
-                   'file set has no files'
-                 elsif error.is_a?(Valkyrie::Persistence::ObjectNotFoundError)
-                   'original file record not found'
-                 else
-                   "#{error.class}: #{error.message}"
-                 end
-        puts "  NO_ORIGINAL #{file_set.id} - #{detail}"
-      end
-      S3Migration.each_original(limit: ENV['LIMIT']&.to_i, progress:, on_error:, &)
-    end
+  desc <<~DESC
+    Move the disk copies of manifested files to <storage>/.quarantine after re-checking the database
+    and the S3 object against the manifest. Dry run unless APPLY=true. VERIFY_SHA=false skips the hash.
+  DESC
+  task quarantine: :environment do
+    S3Migration::Tasks.run(:quarantine)
+  end
 
-    def s3_migration_inline(dry_run:)
-      counts = Hash.new(0)
-      s3_migration_each_original(counts) do |file_set, original|
-        result = S3Migration::FileMigrator.new(file_set:, original:, dry_run:).call
-        counts[result.status] += 1
-        next false if result.status == :already_migrated
+  desc 'Undo a migration from the manifest (restores the disk copy and id, removes the unused upload). Dry run unless APPLY=true.'
+  task rollback: :environment do
+    S3Migration::Tasks.run(:rollback)
+  end
 
-        puts "  #{result.status.to_s.upcase} #{file_set.id} #{result.message}".rstrip
-        true
-      rescue StandardError => e
-        counts[:error] += 1
-        puts "  ERROR #{file_set.id} - #{e.class}: #{e.message}"
-        true
-      end
-      puts "\nExamined #{counts.values.sum} file sets. #{counts.map { |status, count| "#{status}: #{count}" }.join('  ')}".strip
-      puts 'No file sets were found; check the model names and query services.' if counts.empty?
-    end
-
-    desc <<~DESC
-      Move original files from the plain disk storage adapter (disk:// ids) to the :repository_s3 adapter. By default this
-      enqueues jobs (one per file set; set S3_MIGRATION_QUEUE to use a dedicated queue). Each upload is
-      verified by SHA-256 read-back, and against the stored characterization checksum, before the identifier
-      is switched; the disk copy is never touched.
-      Env: DRY_RUN=true runs inline and only reports; INLINE=true runs inline for real; LIMIT=<n> files.
-    DESC
-    task files_to_s3: :environment do
-      s3_migration_require_storage!
-      dry_run = s3_migration_flag('DRY_RUN')
-
-      if dry_run || s3_migration_flag('INLINE')
-        puts "[DRY RUN] No changes will be made.\n\n" if dry_run
-        s3_migration_inline(dry_run:)
-      else
-        S3Migration::MigrateFilesJob.perform_later(limit: ENV['LIMIT']&.to_i)
-        puts 'Enqueued S3Migration::MigrateFilesJob'
-      end
-    end
-
-    desc <<~DESC
-      Read-only audit of originals already in S3: object readable, recorded size and stored checksum match.
-      Get zero problems before deleting anything from disk. Env: LIMIT=<n> files.
-    DESC
-    task verify_s3_files: :environment do
-      counts = Hash.new(0)
-      s3_migration_each_original(counts) do |file_set, original|
-        result = S3Migration::Auditor.new(original:).call
-        counts[result.status] += 1
-        next false if result.status == :not_in_s3
-
-        puts "  PROBLEM #{file_set.id} - #{result.problems.join('; ')}" if result.status == :problem
-        true
-      rescue StandardError => e
-        counts[:problem] += 1
-        puts "  PROBLEM #{file_set.id} - #{e.class}: #{e.message}"
-        true
-      end
-      puts "\nOK: #{counts[:ok]}  Problems: #{counts[:problem]}  Not yet in S3: #{counts[:not_in_s3]}  No original: #{counts[:no_original]}"
-    end
-
-    desc 'Read-only report of file storage by file use and scheme (disk, shrine, ...).'
-    task report_file_storage: :environment do
-      puts "use | scheme | files | GB"
-      S3Migration::StorageReport.call(progress: S3Migration::Progress.new).sort.each do |(use, scheme), (count, bytes)|
-        puts "#{use} | #{scheme} | #{count} | #{(bytes / 1e9).round(2)}"
-      end
-    end
-
-    def s3_migration_run_quarantine(label, action)
-      counts = Hash.new(0)
-      progress = S3Migration::Progress.new(detail: -> { counts.map { |status, count| "#{status}: #{count}" }.join('  ') })
-      S3Migration::Manifest.new.each_entry do |entry|
-        progress.tick
-        quarantine = S3Migration::Quarantine.new(entry, apply: s3_migration_flag('APPLY'),
-                                                               verify_sha: s3_migration_flag('VERIFY_SHA', default: 'true'))
-        status = quarantine.public_send(action)
-        counts[status] += 1
-        puts "  #{label} #{entry[:file_set_id]}" if %i[quarantined rolled_back].include?(status)
-      rescue StandardError => e
-        counts[:error] += 1
-        puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"
-      end
-      puts "\n#{counts.map { |status, count| "#{status}: #{count}" }.join('  ')}".strip
-      puts 'No manifest entries found.' if counts.empty?
-    end
-
-    desc <<~DESC
-      Move the disk copies of manifested files to <storage>/.quarantine after re-checking the database
-      and the S3 object against the manifest. Dry run unless APPLY=true. VERIFY_SHA=false skips the hash.
-    DESC
-    task quarantine_disk_files: :environment do
-      s3_migration_require_storage!
-      puts "[DRY RUN] Nothing will be moved. Set APPLY=true to move.\n\n" unless s3_migration_flag('APPLY')
-      s3_migration_run_quarantine('Quarantine', :quarantine)
-    end
-
-    desc 'Undo a migration from the manifest (restores the disk copy and id, removes the unused upload). Dry run unless APPLY=true.'
-    task rollback_s3_migration: :environment do
-      s3_migration_require_storage!
-      puts "[DRY RUN] Nothing will change. Set APPLY=true to roll back.\n\n" unless s3_migration_flag('APPLY')
-      s3_migration_run_quarantine('Rolling back', :rollback)
-    end
-
-    desc 'Permanently delete the quarantined copies of manifested files older than MIN_AGE_DAYS (default 14). Dry run unless APPLY=true.'
-    task purge_quarantine: :environment do
-      s3_migration_require_storage!
-      apply = s3_migration_flag('APPLY')
-      puts "[DRY RUN] Nothing will be deleted. Set APPLY=true to delete.\n\n" unless apply
-      min_age_days = Float(ENV.fetch('MIN_AGE_DAYS', '14'), exception: false)
-      abort "MIN_AGE_DAYS must be a positive number, got #{ENV['MIN_AGE_DAYS'].inspect}." unless min_age_days&.positive? && min_age_days.finite?
-
-      purged, kept = S3Migration::Quarantine.purge(apply:, min_age: min_age_days.days)
-      puts "#{apply ? 'Deleted' : 'Would delete'}: #{purged}  Too recent: #{kept}"
-    end
+  desc 'Permanently delete the quarantined copies of manifested files older than MIN_AGE_DAYS (default 14). Dry run unless APPLY=true.'
+  task purge: :environment do
+    S3Migration::Tasks.run(:purge)
   end
 end
-# rubocop:enable Metrics/BlockLength, Metrics/MethodLength, Metrics/AbcSize

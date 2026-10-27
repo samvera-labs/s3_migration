@@ -21,19 +21,19 @@ New files now get `shrine://` identifiers. Existing files keep working from disk
 
 ## 3. Migrate existing files
 
-`hyrax:migrate:files_to_s3` enqueues one background job per file set (`S3Migration::MigrateFilesJob` lists the disk files, `S3Migration::MigrateFileSetJob` moves each one), so speed scales with the number of job workers. Each job uploads the file, reads it back from S3 and compares its SHA-256 with the disk file, and only then switches the identifier; on a mismatch the upload is removed and the file stays on disk. The S3 adapter also verifies each upload on its own, comparing an MD5 of the source file with the object's ETag, which reads the source file one more time. Before uploading, the disk file is also checked against the checksum Hyrax recorded when the file was characterized (an MD5, optionally written as `urn:md5:`, `urn:sha1:` or `urn:sha256:`); a mismatch is reported as `suspect` and the file is not migrated. Transient errors retry. The disk copy is never touched, and the task can be re-run safely (migrated files are skipped).
+`s3_migration:migrate` enqueues one background job per file set (`S3Migration::MigrateFilesJob` lists the disk files, `S3Migration::MigrateFileSetJob` moves each one), so speed scales with the number of job workers. Each job uploads the file, reads it back from S3 and compares its SHA-256 with the disk file, and only then switches the identifier; on a mismatch the upload is removed and the file stays on disk. The S3 adapter also verifies each upload on its own, comparing an MD5 of the source file with the object's ETag, which reads the source file one more time. Before uploading, the disk file is also checked against the checksum Hyrax recorded when the file was characterized (an MD5, optionally written as `urn:md5:`, `urn:sha1:` or `urn:sha256:`); a mismatch is reported as `suspect` and the file is not migrated. Transient errors retry. The disk copy is never touched, and the task can be re-run safely (migrated files are skipped).
 
 Start with a dry run, which runs inline and prints what it would do. It reads every file to check checksums, so it takes a while on large repositories:
 
 ```bash
-DRY_RUN=true bundle exec rake hyrax:migrate:files_to_s3
+DRY_RUN=true bundle exec rake s3_migration:migrate
 ```
 
 Then a small real batch, run inline so you can read the output, followed by the full run, which enqueues jobs:
 
 ```bash
-INLINE=true LIMIT=5 bundle exec rake hyrax:migrate:files_to_s3
-bundle exec rake hyrax:migrate:files_to_s3
+INLINE=true LIMIT=5 bundle exec rake s3_migration:migrate
+bundle exec rake s3_migration:migrate
 ```
 
 Run these wherever you normally run rake tasks against the app (a console on an app host, a container, an orchestrator job).
@@ -54,7 +54,7 @@ The tasks work on the repository the app is currently pointed at, so run them on
 
 ## 4. Verify
 
-- Audit what is in S3 (read-only; checks the object exists, the recorded size and the stored checksum): `bundle exec rake hyrax:migrate:verify_s3_files`. Expect `Problems: 0`.
+- Audit what is in S3 (read-only; checks the object exists, the recorded size and the stored checksum): `bundle exec rake s3_migration:verify`. Expect `Problems: 0`.
 - A newly created work's original has a `shrine://` identifier.
 - Old and new works still display their files (viewer/IIIF, downloads) after clearing caches.
 - Thumbnails are unaffected (they are derivatives).
@@ -65,9 +65,9 @@ The tasks work on the repository the app is currently pointed at, so run them on
 Every migrated file is recorded in a manifest object in the bucket (`_migration-manifests/<file set id>.json`: file set and file IDs, old disk id, new S3 id, size, SHA-256). Deletion is manifest-driven, never `rm -rf storage/files`.
 
 1. Take a snapshot or backup of the storage volume, and keep bucket versioning on.
-2. `bundle exec rake hyrax:migrate:report_file_storage` lists what is still on disk by file use and storage scheme. The migration only moves originals; extracted text, other file versions and similar may still be `disk://` and are not covered by the manifest.
-3. Dry-run, then apply: `bundle exec rake hyrax:migrate:quarantine_disk_files` (add `APPLY=true`). For each file it re-checks that the database still points at the S3 id and that the S3 object matches the manifest size and SHA-256, then moves the disk copy to `<storage>/.quarantine` (a rename within the same volume).
-4. Soak (at least a week or two, through a backup cycle), re-checking the site. To undo, `bundle exec rake hyrax:migrate:rollback_s3_migration` (dry-run by default, `APPLY=true`) checks the disk copy against the manifest, restores it and the original identifier, then removes the S3 upload and manifest entry that are no longer used (bucket versioning keeps the removed object recoverable).
-5. Permanently delete: `bundle exec rake hyrax:migrate:purge_quarantine` (dry-run by default; `APPLY=true`, `MIN_AGE_DAYS=14`, which must be a positive number). Like every step above it works from the manifest: it deletes only the quarantined copies of files in the manifest scope it runs under (see `S3Migration.scope_provider`), and leaves anything else in `.quarantine`.
+2. `bundle exec rake s3_migration:report` lists what is still on disk by file use and storage scheme. The migration only moves originals; extracted text, other file versions and similar may still be `disk://` and are not covered by the manifest.
+3. Dry-run, then apply: `bundle exec rake s3_migration:quarantine` (add `APPLY=true`). For each file it re-checks that the database still points at the S3 id and that the S3 object matches the manifest size and SHA-256, then moves the disk copy to `<storage>/.quarantine` (a rename within the same volume).
+4. Soak (at least a week or two, through a backup cycle), re-checking the site. To undo, `bundle exec rake s3_migration:rollback` (dry-run by default, `APPLY=true`) checks the disk copy against the manifest, restores it and the original identifier, then removes the S3 upload and manifest entry that are no longer used (bucket versioning keeps the removed object recoverable).
+5. Permanently delete: `bundle exec rake s3_migration:purge` (dry-run by default; `APPLY=true`, `MIN_AGE_DAYS=14`, which must be a positive number). Like every step above it works from the manifest: it deletes only the quarantined copies of files in the manifest scope it runs under (see `S3Migration.scope_provider`), and leaves anything else in `.quarantine`.
 
 Do a non-production environment first and production after, checking again between each. Storage is usually billed or provisioned by stored bytes, so the saving only appears after step 5 (and, on volumes you size by hand, after you shrink them). Derivatives often remain on the volume; size them separately. If your storage offers cheaper tiers for rarely read files, enabling them is a lower-risk way to cut cost while you work through the steps above.
