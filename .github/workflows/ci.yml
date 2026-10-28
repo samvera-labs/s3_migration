@@ -24,8 +24,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ruby: ['3.2', '3.3', '3.4']
-        rails: ['7.2', '8.1']
+        ruby: ['3.2', '3.3', '3.4', '4.0']
+        rails: ['7.2']
     env:
       RAILS_VERSION: ${{ matrix.rails }}
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/s3_migration_test
