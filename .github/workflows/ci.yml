@@ -31,7 +31,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/s3_migration_test
     services:
       postgres:
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_PASSWORD: postgres
         ports:
