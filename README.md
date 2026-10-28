@@ -41,13 +41,52 @@ The tasks work on whichever repository the app is pointed at, so run them once p
 
 ## Development
 
-The specs run in a small Rails app under `spec/internal` that boots Hyrax with the Postgres Valkyrie adapter. It needs only a Postgres database, not Fedora, Solr or Redis.
+The specs run in a small Rails app under `spec/internal` that boots Hyrax with the Postgres Valkyrie adapter. They need only Postgres, not Fedora, Solr, Redis or S3.
 
-```bash
-bundle install               # the specs create the database if it is missing; set DATABASE_URL to use another Postgres
-bundle exec rspec            # fails below 100% line coverage
-bundle exec rubocop
-```
+### Running the specs
+
+1. Start Postgres. [docker-compose.yaml](docker-compose.yaml) runs one on `localhost:5432` with user and password `postgres`, matching the default connection:
+
+   ```bash
+   docker compose up -d --wait postgres
+   ```
+
+   If port 5432 is taken (for example by a local Postgres), pick another and point the specs at it:
+
+   ```bash
+   POSTGRES_PORT=5433 docker compose up -d --wait postgres
+   export DATABASE_URL=postgres://postgres:postgres@localhost:5433/s3_migration_test
+   ```
+
+   Any other Postgres works too: set `DATABASE_URL` to it. Without `DATABASE_URL` the specs use `postgres://postgres:postgres@localhost:5432/s3_migration_test`.
+
+2. Install the gems (Ruby 3.2 or newer):
+
+   ```bash
+   bundle install
+   ```
+
+3. Run the specs. The first run creates the `s3_migration_test` database and loads `spec/internal/db/schema.rb` into it.
+
+   ```bash
+   bundle exec rspec                                  # whole suite
+   bundle exec rspec spec/s3_migration/file_migrator_spec.rb       # one file
+   bundle exec rspec spec/s3_migration/file_migrator_spec.rb:42    # one example, by line
+   bundle exec rspec --only-failures                  # re-run what failed last time
+   ```
+
+   A full run fails unless line coverage is 100%; the report is written to `coverage/index.html`. A run of a single file always reports low coverage, so ignore that failure when you filter.
+
+4. Lint with `bundle exec rubocop`, then stop Postgres when you are done:
+
+   ```bash
+   docker compose down        # add -v to delete the database volume too
+   ```
+
+### Troubleshooting
+
+- `PG::ConnectionBad` or `connection refused`: Postgres is not up yet, or `DATABASE_URL` points somewhere else. Check `docker compose ps`.
+- Schema changes: after editing `spec/internal/db/schema.rb`, run `docker compose down -v` and start again so the specs reload it into a fresh database.
 
 CI (GitHub Actions) runs rubocop and the specs on each push and pull request, and requires both to pass.
 
