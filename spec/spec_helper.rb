@@ -2,9 +2,9 @@
 
 require 'simplecov'
 SimpleCov.start do
-  track_files '{lib}/**/*.{rb,rake}'
-  add_filter '/spec/'
-  add_filter 'lib/s3_migration/version.rb' # the gemspec loads it before coverage starts, so it cannot be measured
+  cover '{lib}/**/*.{rb,rake}'
+  skip '/spec/'
+  skip 'lib/s3_migration/version.rb' # the gemspec loads it before coverage starts, so it cannot be measured
   minimum_coverage 100 # lines
 end
 
