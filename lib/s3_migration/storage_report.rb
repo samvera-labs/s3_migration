@@ -9,15 +9,20 @@ module S3Migration
       totals = Hash.new { |hash, key| hash[key] = [0, 0] }
       S3Migration.each_file_set do |file_set|
         progress&.tick
-        files = files_for(file_set)
-        totals[['(file record missing)', '-']][0] += 1 unless files
-        files&.each do |file|
-          key = [use_for(file), file.file_identifier.to_s[/\A[a-z]+(?=:)/].to_s]
-          totals[key][0] += 1
-          totals[key][1] += file.recorded_size.first.to_i
-        end
+        add_files(totals, files_for(file_set))
       end
       totals
+    end
+
+    def self.add_files(totals, files)
+      totals[['(file record missing)', '-']][0] += 1 unless files
+      files&.each { |file| add_file(totals, file) }
+    end
+
+    def self.add_file(totals, file)
+      count_and_bytes = totals[[use_for(file), file.file_identifier.to_s[/\A[a-z]+(?=:)/].to_s]]
+      count_and_bytes[0] += 1
+      count_and_bytes[1] += file.recorded_size.first.to_i
     end
 
     def self.files_for(file_set)

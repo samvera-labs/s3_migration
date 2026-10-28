@@ -32,16 +32,7 @@ module S3Migration
     def verify
       counts = Hash.new(0)
       each_original(counts) do |file_set, original|
-        result = Auditor.new(original:).call
-        counts[result.status] += 1
-        next false if result.status == :not_in_s3
-
-        out.puts "  PROBLEM #{file_set.id} - #{result.problems.join('; ')}" if result.status == :problem
-        true
-      rescue StandardError => e
-        counts[:problem] += 1
-        out.puts "  PROBLEM #{file_set.id} - #{e.class}: #{e.message}"
-        true
+        guarded(counts, file_set, :problem) { audit_counted?(counts, file_set, original) }
       end
       out.puts "\nOK: #{counts[:ok]}  Problems: #{counts[:problem]}  " \
                "Not yet in S3: #{counts[:not_in_s3]}  No original: #{counts[:no_original]}"
@@ -138,19 +129,37 @@ module S3Migration
     def migrate_inline(dry_run:)
       counts = Hash.new(0)
       each_original(counts) do |file_set, original|
-        result = FileMigrator.new(file_set:, original:, dry_run:).call
-        counts[result.status] += 1
-        next false if result.status == :already_migrated
-
-        out.puts "  #{result.status.to_s.upcase} #{file_set.id} #{result.message}".rstrip
-        true
-      rescue StandardError => e
-        counts[:error] += 1
-        out.puts "  ERROR #{file_set.id} - #{e.class}: #{e.message}"
-        true
+        guarded(counts, file_set, :error) { migrate_counted?(counts, file_set, original, dry_run:) }
       end
       out.puts "\nExamined #{counts.values.sum} file sets. #{tally(counts)}".strip
       out.puts 'No file sets were found; check the model names and query services.' if counts.empty?
+    end
+
+    # Runs the block for one file set; a StandardError is counted under key and printed, and the run goes on.
+    def guarded(counts, file_set, key)
+      yield
+    rescue StandardError => e
+      counts[key] += 1
+      out.puts "  #{key.to_s.upcase} #{file_set.id} - #{e.class}: #{e.message}"
+      true
+    end
+
+    def audit_counted?(counts, file_set, original)
+      result = Auditor.new(original:).call
+      counts[result.status] += 1
+      return false if result.status == :not_in_s3
+
+      out.puts "  PROBLEM #{file_set.id} - #{result.problems.join('; ')}" if result.status == :problem
+      true
+    end
+
+    def migrate_counted?(counts, file_set, original, dry_run:)
+      result = FileMigrator.new(file_set:, original:, dry_run:).call
+      counts[result.status] += 1
+      return false if result.status == :already_migrated
+
+      out.puts "  #{result.status.to_s.upcase} #{file_set.id} #{result.message}".rstrip
+      true
     end
 
     def each_entry(label, action)
@@ -158,16 +167,20 @@ module S3Migration
       progress = Progress.new(detail: -> { tally(counts) })
       Manifest.new.each_entry do |entry|
         progress.tick
-        status = Quarantine.new(entry, apply: flag('APPLY'),
-                                       verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
-        counts[status] += 1
-        out.puts "  #{label} #{entry[:file_set_id]}" if ACTED_ON.include?(status)
-      rescue StandardError => e
-        counts[:error] += 1
-        out.puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"
+        process_entry(entry, counts, label, action)
       end
       out.puts "\n#{tally(counts)}".strip
       out.puts 'No manifest entries found.' if counts.empty?
+    end
+
+    def process_entry(entry, counts, label, action)
+      status = Quarantine.new(entry, apply: flag('APPLY'),
+                                     verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
+      counts[status] += 1
+      out.puts "  #{label} #{entry[:file_set_id]}" if ACTED_ON.include?(status)
+    rescue StandardError => e
+      counts[:error] += 1
+      out.puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"
     end
   end
 end

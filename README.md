@@ -90,6 +90,8 @@ The specs run in a small Rails app under `spec/internal` that boots Hyrax with t
 
 CI (GitHub Actions) runs rubocop and the specs on each push and pull request, and requires both to pass.
 
+Every pull request needs one release-note label, which the `Verify` check enforces: `patch-ver` (bug fix), `minor-ver` (new backward-compatible feature), `major-ver` (breaking change), `dependencies` (dependency bump, set by Dependabot) or `ignore-for-release` (CI, docs, tooling).
+
 ## License
 
 MIT. See [LICENSE](LICENSE).
