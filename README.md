@@ -92,6 +92,16 @@ CI (GitHub Actions) runs rubocop and the specs on each push and pull request, an
 
 Every pull request needs one release-note label, which the `Verify` check enforces: `patch-ver` (bug fix), `minor-ver` (new backward-compatible feature), `major-ver` (breaking change), `dependencies` (dependency bump, set by Dependabot) or `ignore-for-release` (CI, docs, tooling).
 
+### Releasing
+
+On an up-to-date, clean `main`, bump `S3Migration::VERSION` in `lib/s3_migration/version.rb` and merge that change. Then, signed in to rubygems.org (`gem signin`; the gem requires MFA):
+
+```bash
+bundle exec rake release
+```
+
+This tags `vX.Y.Z`, pushes the tag and publishes the gem. `bundle exec rake build` builds it into `pkg/` without publishing.
+
 ## License
 
 MIT. See [LICENSE](LICENSE).

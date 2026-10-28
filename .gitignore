@@ -8,3 +8,4 @@
 /spec/internal/tmp/
 /spec/internal/storage/
 Gemfile.lock
+/pkg/
