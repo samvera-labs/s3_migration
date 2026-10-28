@@ -17,10 +17,13 @@ module S3Migration
     def self.purge(apply:, min_age:, base: base_path, manifest: Manifest.new)
       raise ArgumentError, "min_age must be positive, got #{min_age.inspect}" unless min_age.to_f.positive?
 
-      files = manifest.each_entry.filter_map { |entry| quarantine_path(entry, base) }.select { |file| File.file?(file) }
-      old, recent = files.partition { |file| Time.current - File.mtime(file) >= min_age }
+      old, recent = quarantined_files(manifest, base).partition { |file| Time.current - File.mtime(file) >= min_age }
       old.each { |file| delete_with_empty_parents(file, base) } if apply
       [old.size, recent.size]
+    end
+
+    def self.quarantined_files(manifest, base)
+      manifest.each_entry.filter_map { |entry| quarantine_path(entry, base) }.select { |file| File.file?(file) }
     end
 
     def self.disk_path(entry, base)
@@ -133,11 +136,19 @@ module S3Migration
 
     # The rollback has already succeeded, so a failure here only leaves an unused upload behind.
     def discard_upload
-      UploadCleanup.new(file_set_id: entry[:file_set_id], file_metadata_id: entry[:file_metadata_id], s3_storage:,
-                        manifest:).call(entry[:new_id])
+      upload_cleanup.call(entry[:new_id])
     rescue StandardError => e
+      log_discard_failure(e)
+    end
+
+    def upload_cleanup
+      UploadCleanup.new(file_set_id: entry[:file_set_id], file_metadata_id: entry[:file_metadata_id],
+                        s3_storage:, manifest:)
+    end
+
+    def log_discard_failure(error)
       Hyrax.logger.warn("S3Migration: rolled back #{entry[:file_set_id]} but could not remove " \
-                        "#{entry[:new_id]}: #{e.class}: #{e.message}")
+                        "#{entry[:new_id]}: #{error.class}: #{error.message}")
     end
   end
 end

@@ -87,24 +87,27 @@ module S3Migration
 
     def migrate
       uploaded = nil
-      persisted = false
       disk_sha256 = disk_digests[:sha256]
       uploaded = upload_original
-      return result(:mismatch, 'S3 copy does not match disk (size/SHA-256)') unless copy_matches?(uploaded, disk_sha256)
+      outcome = if copy_matches?(uploaded, disk_sha256)
+                  switch_identifier(uploaded, disk_sha256)
+                else
+                  result(:mismatch, 'S3 copy does not match disk (size/SHA-256)')
+                end
+    ensure
+      discard_upload(uploaded) if uploaded && outcome&.status != :migrated
+    end
 
+    def switch_identifier(uploaded, disk_sha256)
       current = Hyrax.query_service.find_by(id: original.id)
       unless SourceStorage.handles?(current.file_identifier)
-        return result(:raced,
-                      'already migrated by another process')
+        return result(:raced, 'already migrated by another process')
       end
 
       entry = build_entry(uploaded, disk_sha256)
       manifest.write(entry)
       persist(current, uploaded)
-      persisted = true
       result(:migrated, nil, entry)
-    ensure
-      discard_upload(uploaded) if uploaded && !persisted
     end
 
     # The adapter checks the copy inside upload, so a failure there leaves an object under a key we never see.
