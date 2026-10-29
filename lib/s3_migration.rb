@@ -66,9 +66,10 @@ module S3Migration
 
     # The lookups below ask only the non-Wings services. The composite ones also ask Wings, and a miss there
     # reaches Fedora, which can hang (and ActiveFedora may try to create the tenant's base container).
-    def find_file_set(id)
+    def find_resource(id)
       each_service_result { |service| service.find_by(id:) }.first || raise(Valkyrie::Persistence::ObjectNotFoundError)
     end
+    alias find_file_set find_resource
 
     def find_files(file_set:)
       each_service_result { |service| service.custom_queries.find_files(file_set:).to_a }.flatten

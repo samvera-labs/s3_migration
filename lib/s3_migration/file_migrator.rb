@@ -99,7 +99,7 @@ module S3Migration
     end
 
     def switch_identifier(uploaded, disk_sha256)
-      current = Hyrax.query_service.find_by(id: original.id)
+      current = S3Migration.find_resource(original.id)
       unless SourceStorage.handles?(current.file_identifier)
         return result(:raced, 'already migrated by another process')
       end
