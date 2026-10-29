@@ -26,7 +26,7 @@ module S3Migration
 
     # When the database cannot be read, keep the upload: the manifest entry still points at it.
     def referenced?(upload_id)
-      Hyrax.query_service.find_by(id: file_metadata_id).file_identifier == upload_id
+      S3Migration.find_resource(file_metadata_id).file_identifier == upload_id
     rescue StandardError
       true
     end

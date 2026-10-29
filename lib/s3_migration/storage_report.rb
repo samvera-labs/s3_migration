@@ -26,7 +26,7 @@ module S3Migration
     end
 
     def self.files_for(file_set)
-      Hyrax.custom_queries.find_files(file_set:)
+      S3Migration.find_files(file_set:)
     rescue Valkyrie::Persistence::ObjectNotFoundError
       nil
     end

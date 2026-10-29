@@ -98,7 +98,7 @@ module S3Migration
     end
 
     def current
-      @current ||= Hyrax.query_service.find_by(id: entry[:file_metadata_id])
+      @current ||= S3Migration.find_resource(entry[:file_metadata_id])
     end
 
     def current_identifier

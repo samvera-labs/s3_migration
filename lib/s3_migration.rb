@@ -58,10 +58,39 @@ module S3Migration
     end
 
     def original_for(file_set, on_error: nil)
-      Hyrax.custom_queries.find_original_file(file_set:)
+      find_original_file(file_set:)
     rescue StandardError => e
       on_error&.call(file_set, e)
       nil
+    end
+
+    # The lookups below ask only the non-Wings services. The composite ones also ask Wings, and a miss there
+    # reaches Fedora, which can hang (and ActiveFedora may try to create the tenant's base container).
+    def find_resource(id)
+      each_service_result { |service| service.find_by(id:) }.first || raise(Valkyrie::Persistence::ObjectNotFoundError)
+    end
+    alias find_file_set find_resource
+
+    def find_files(file_set:)
+      each_service_result { |service| service.custom_queries.find_files(file_set:).to_a }.flatten
+    end
+
+    def find_original_file(file_set:)
+      each_service_result { |service| service.custom_queries.find_original_file(file_set:) }.first
+    end
+
+    # Each service's non-nil result; raises ObjectNotFoundError only when every service raised it.
+    def each_service_result
+      errors = []
+      results = query_services.filter_map do |service|
+        yield service
+      rescue Valkyrie::Persistence::ObjectNotFoundError => e
+        errors << e
+        nil
+      end
+      raise errors.first if results.empty? && errors.any?
+
+      results
     end
 
     def query_services

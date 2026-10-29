@@ -7,8 +7,8 @@ RSpec.describe S3Migration::MigrateFileSetJob do
   let(:result) { S3Migration::FileMigrator::Result.new(status: :migrated) }
 
   before do
-    allow(Hyrax.query_service).to receive(:find_by).with(id: 'fs1').and_return(file_set)
-    allow(Hyrax.custom_queries).to receive(:find_original_file).with(file_set:).and_return(original)
+    allow(S3Migration).to receive(:find_file_set).with('fs1').and_return(file_set)
+    allow(S3Migration).to receive(:find_original_file).with(file_set:).and_return(original)
     allow(S3Migration::FileMigrator).to receive(:new).and_return(migrator)
   end
 
@@ -24,14 +24,14 @@ RSpec.describe S3Migration::MigrateFileSetJob do
   end
 
   it 'does nothing when the file set has no original file' do
-    allow(Hyrax.custom_queries).to receive(:find_original_file).with(file_set:).and_return(nil)
+    allow(S3Migration).to receive(:find_original_file).with(file_set:).and_return(nil)
 
     expect(described_class.perform_now('fs1')).to be_nil
     expect(S3Migration::FileMigrator).not_to have_received(:new)
   end
 
   it 'skips file sets that no longer exist' do
-    allow(Hyrax.query_service).to receive(:find_by).and_raise(Valkyrie::Persistence::ObjectNotFoundError)
+    allow(S3Migration).to receive(:find_file_set).and_raise(Valkyrie::Persistence::ObjectNotFoundError)
 
     expect { described_class.perform_now('fs1') }.not_to raise_error
   end
