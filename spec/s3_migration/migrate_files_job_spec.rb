@@ -15,7 +15,7 @@ RSpec.describe S3Migration::MigrateFilesJob do
   before do
     allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: '/'))
     allow(S3Migration).to receive(:each_file_set) { |&block| file_sets.each(&block) }
-    allow(Hyrax.custom_queries).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
+    allow(S3Migration).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
     allow(S3Migration::MigrateFileSetJob).to receive(:perform_later)
   end
 
@@ -33,8 +33,8 @@ RSpec.describe S3Migration::MigrateFilesJob do
   end
 
   it 'skips file sets that disappear while enumerating' do
-    allow(Hyrax.custom_queries).to receive(:find_original_file).with(file_set: file_sets.first)
-                                                               .and_raise(Valkyrie::Persistence::ObjectNotFoundError)
+    allow(S3Migration).to receive(:find_original_file).with(file_set: file_sets.first)
+                                                      .and_raise(Valkyrie::Persistence::ObjectNotFoundError)
 
     expect(described_class.perform_now).to eq 2
   end

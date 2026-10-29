@@ -71,7 +71,7 @@ RSpec.describe S3Migration do
 
     before do
       allow(described_class).to receive(:each_file_set) { |&block| file_sets.each(&block) }
-      allow(Hyrax.custom_queries).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
+      allow(described_class).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
     end
 
     it 'yields each file set that has an original, and skips the rest' do
@@ -82,7 +82,7 @@ RSpec.describe S3Migration do
     end
 
     it 'reports a file set whose original cannot be loaded, and carries on' do
-      allow(Hyrax.custom_queries).to receive(:find_original_file).with(file_set: file_sets[0]).and_raise(Valkyrie::Persistence::ObjectNotFoundError)
+      allow(described_class).to receive(:find_original_file).with(file_set: file_sets[0]).and_raise(Valkyrie::Persistence::ObjectNotFoundError)
       errors = []
       seen = []
 
@@ -95,7 +95,7 @@ RSpec.describe S3Migration do
     end
 
     it 'skips quietly when no error handler is given' do
-      allow(Hyrax.custom_queries).to receive(:find_original_file).and_raise(StandardError, 'boom')
+      allow(described_class).to receive(:find_original_file).and_raise(StandardError, 'boom')
 
       expect { described_class.each_original { |_fs, _o| nil } }.not_to raise_error
     end
@@ -123,6 +123,79 @@ RSpec.describe S3Migration do
       described_class.each_original(progress:) { |_fs, _o| true }
 
       expect(progress).to have_received(:tick).exactly(4).times
+    end
+  end
+
+  describe 'lookups that skip Wings' do
+    let(:not_found) { Valkyrie::Persistence::ObjectNotFoundError }
+    let(:file_set) { double('file set') }
+    let(:postgres_queries) { double('postgres custom queries') }
+    let(:postgres) { double('postgres query service', custom_queries: postgres_queries) }
+    let(:wings_queries) { double('wings custom queries') }
+    let(:wings) { double('wings query service', custom_queries: wings_queries) }
+    let(:composite) { double('composite', services: [wings, postgres]) }
+
+    before do
+      stub_const('Wings::Valkyrie::QueryService', Class.new)
+      allow(wings).to receive(:is_a?).with(Wings::Valkyrie::QueryService).and_return(true)
+      allow(postgres).to receive(:is_a?).with(Wings::Valkyrie::QueryService).and_return(false)
+      allow(Hyrax).to receive(:query_service).and_return(composite)
+    end
+
+    describe '.find_file_set' do
+      it 'finds the file set in a non-Wings service without asking Wings' do
+        allow(postgres).to receive(:find_by).with(id: 'fs1').and_return(file_set)
+        allow(wings).to receive(:find_by).and_raise('Wings should not be queried')
+
+        expect(described_class.find_file_set('fs1')).to eq file_set
+      end
+
+      it 'raises ObjectNotFoundError when no service has it' do
+        allow(postgres).to receive(:find_by).and_raise(not_found)
+
+        expect { described_class.find_file_set('fs1') }.to raise_error(not_found)
+      end
+
+      it 'raises ObjectNotFoundError when there are no services to ask' do
+        allow(composite).to receive(:services).and_return([wings])
+
+        expect { described_class.find_file_set('fs1') }.to raise_error(not_found)
+      end
+    end
+
+    describe '.find_files' do
+      it 'returns the files from the non-Wings services only' do
+        allow(postgres_queries).to receive(:find_files).with(file_set:).and_return(%i[a b])
+        allow(wings_queries).to receive(:find_files).and_raise('Wings should not be queried')
+
+        expect(described_class.find_files(file_set:)).to eq %i[a b]
+      end
+
+      it 'returns an empty list when the file set has none' do
+        allow(postgres_queries).to receive(:find_files).and_return([])
+
+        expect(described_class.find_files(file_set:)).to eq []
+      end
+
+      it 'raises ObjectNotFoundError when every service raises it' do
+        allow(postgres_queries).to receive(:find_files).and_raise(not_found)
+
+        expect { described_class.find_files(file_set:) }.to raise_error(not_found)
+      end
+    end
+
+    describe '.find_original_file' do
+      it 'returns the original from a non-Wings service' do
+        allow(postgres_queries).to receive(:find_original_file).with(file_set:).and_return(:original)
+
+        expect(described_class.find_original_file(file_set:)).to eq :original
+      end
+
+      it 'returns nil when the file set has no original' do
+        allow(postgres_queries).to receive(:find_original_file).and_return(nil)
+
+        expect(described_class.find_original_file(file_set:)).to be_nil
+      end
     end
   end
 

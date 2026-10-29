@@ -8,8 +8,8 @@ module S3Migration
     retry_on StandardError, wait: :polynomially_longer, attempts: 5
 
     def perform(file_set_id, dry_run: false)
-      file_set = Hyrax.query_service.find_by(id: file_set_id)
-      original = Hyrax.custom_queries.find_original_file(file_set:)
+      file_set = S3Migration.find_file_set(file_set_id)
+      original = S3Migration.find_original_file(file_set:)
       return unless original
 
       result = S3Migration::FileMigrator.new(file_set:, original:, dry_run:).call
