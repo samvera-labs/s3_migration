@@ -10,18 +10,24 @@ RSpec.describe S3Migration::StoredChecksum do
   let(:sha256_hex) { Digest::SHA256.hexdigest('x') }
 
   it 'reads a bare hex string as the MD5 that FITS records' do
-    stored = described_class.for(original_with(md5))
+    stored = described_class.all(original_with(md5)).first
 
     expect([stored.algorithm, stored.digest, stored.digest_class]).to eq ['md5', md5, Digest::MD5]
   end
 
   it 'understands an explicit urn prefix, in any case' do
-    expect(described_class.for(original_with("urn:sha1:#{sha1_hex}")).digest_class).to eq Digest::SHA1
-    expect(described_class.for(original_with("URN:SHA256:#{sha256_hex.upcase}")).digest).to eq sha256_hex
+    expect(described_class.all(original_with("urn:sha1:#{sha1_hex}")).first.digest_class).to eq Digest::SHA1
+    expect(described_class.all(original_with("URN:SHA256:#{sha256_hex.upcase}")).first.digest).to eq sha256_hex
+  end
+
+  it 'returns every usable checksum and skips the rest' do
+    stored = described_class.all(original_with(md5, 'not-a-hex-digest', "urn:sha1:#{sha1_hex}"))
+
+    expect(stored.map(&:to_s)).to eq ["md5:#{md5}", "sha1:#{sha1_hex}"]
   end
 
   it 'has a readable string form' do
-    expect(described_class.for(original_with(md5)).to_s).to eq "md5:#{md5}"
+    expect(described_class.all(original_with(md5)).first.to_s).to eq "md5:#{md5}"
   end
 
   [
@@ -33,7 +39,7 @@ RSpec.describe S3Migration::StoredChecksum do
     ['0123456789abcdef0123456789abcdef01234567'] # 40 hex without a prefix is not assumed to be SHA-1
   ].each do |checksums|
     it "ignores #{checksums.inspect}" do
-      expect(described_class.for(original_with(*checksums))).to be_nil
+      expect(described_class.all(original_with(*checksums)).first).to be_nil
     end
   end
 end

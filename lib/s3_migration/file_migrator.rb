@@ -58,15 +58,15 @@ module S3Migration
       result(:suspect, "disk file does not match stored checksum #{suspect}") if suspect
     end
 
-    def stored_checksum
-      return @stored_checksum if defined?(@stored_checksum)
-
-      @stored_checksum = StoredChecksum.for(original)
+    def stored_checksums
+      @stored_checksums ||= StoredChecksum.all(original)
     end
 
     def stored_checksum_mismatch
-      stored = stored_checksum
-      stored.to_s if stored && disk_digests[:stored] != stored.digest
+      return if stored_checksums.empty?
+      return if stored_checksums.any? { |stored| disk_digests[:stored][stored.algorithm] == stored.digest }
+
+      stored_checksums.join(', ')
     end
 
     # One pass feeds both digests. The S3 adapter then reads the file again to upload it, and once more to
@@ -74,14 +74,14 @@ module S3Migration
     def disk_digests
       @disk_digests ||= begin
         sha256 = Digest::SHA256.new
-        stored = stored_checksum&.digest_class&.new
+        stored = stored_checksums.to_h { |checksum| [checksum.algorithm, checksum.digest_class.new] }
         File.open(disk_path, 'rb') do |io|
           while (chunk = io.read(CHUNK_SIZE))
             sha256 << chunk
-            stored << chunk if stored
+            stored.each_value { |digest| digest << chunk }
           end
         end
-        { sha256: sha256.hexdigest, stored: stored&.hexdigest }
+        { sha256: sha256.hexdigest, stored: stored.transform_values(&:hexdigest) }
       end
     end
 

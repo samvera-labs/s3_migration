@@ -150,6 +150,21 @@ RSpec.describe S3Migration::FileMigrator do
       it { expect(result.status).to eq :migrated }
     end
 
+    context 'when the disk file matches a later stored checksum' do
+      let(:checksum) { [Digest::MD5.hexdigest('older version'), Digest::MD5.hexdigest(content)] }
+
+      it { expect(result.status).to eq :migrated }
+    end
+
+    context 'when the disk file matches none of several stored checksums' do
+      let(:checksum) { [Digest::MD5.hexdigest('one'), "urn:sha1:#{Digest::SHA1.hexdigest('two')}"] }
+
+      it 'flags the file as suspect and names each checksum' do
+        expect(result.status).to eq :suspect
+        expect(result.message).to include('md5:', 'sha1:')
+      end
+    end
+
     context 'when the disk file does not match' do
       let(:checksum) { [Digest::MD5.hexdigest('something else')] }
 

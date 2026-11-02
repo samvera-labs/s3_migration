@@ -49,11 +49,14 @@ module S3Migration
       each_file_set do |file_set|
         break if limit && done >= limit
 
-        progress&.tick
-        original = original_for(file_set, on_error:)
-        next unless original
+        begin
+          original = original_for(file_set, on_error:)
+          next unless original
 
-        done += 1 if yield(file_set, original)
+          done += 1 if yield(file_set, original)
+        ensure
+          progress&.tick
+        end
       end
     end
 
