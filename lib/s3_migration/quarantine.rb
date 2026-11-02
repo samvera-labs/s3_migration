@@ -28,7 +28,7 @@ module S3Migration
 
     def self.disk_path(entry, base)
       candidate = SourceStorage.path_for(entry[:old_id])
-      candidate if candidate.start_with?("#{base}/")
+      candidate if candidate&.start_with?("#{base}/")
     end
 
     def self.quarantine_path(entry, base)
