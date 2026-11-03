@@ -165,6 +165,7 @@ RSpec.describe S3Migration::Tasks do
       tasks.verify
 
       expect(output).to include('PROBLEM fs1 - size differs; no object', 'PROBLEM fs1 - RuntimeError: boom',
+                                'NOT_IN_S3 fs1',
                                 'OK: 1  Problems: 2  Not yet in S3: 1  No original: 0')
     end
   end

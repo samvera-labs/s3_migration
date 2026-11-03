@@ -147,7 +147,10 @@ module S3Migration
     def audit_counted?(counts, file_set, original)
       result = Auditor.new(original:).call
       counts[result.status] += 1
-      return false if result.status == :not_in_s3
+      if result.status == :not_in_s3
+        out.puts "  NOT_IN_S3 #{file_set.id}"
+        return false
+      end
 
       out.puts "  PROBLEM #{file_set.id} - #{result.problems.join('; ')}" if result.status == :problem
       true
