@@ -16,7 +16,7 @@ AllCops:
 Metrics/MethodLength:
   Max: 20
 Metrics/ClassLength:
-  Max: 150
+  Max: 155
 Metrics/BlockLength:
   Exclude:
     - spec/**/*

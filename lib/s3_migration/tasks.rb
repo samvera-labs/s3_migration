@@ -180,10 +180,15 @@ module S3Migration
       status = Quarantine.new(entry, apply: flag('APPLY'),
                                      verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
       counts[status] += 1
-      out.puts "  #{label} #{entry[:file_set_id]}" if ACTED_ON.include?(status)
+      print_outcome(status, entry[:file_set_id], label)
     rescue StandardError => e
       counts[:error] += 1
       out.puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"
+    end
+
+    def print_outcome(status, file_set_id, label)
+      out.puts "  #{label} #{file_set_id}" if ACTED_ON.include?(status)
+      out.puts "  FILE_DELETED #{file_set_id} - file set deleted after migration; skipped" if status == :file_deleted
     end
   end
 end

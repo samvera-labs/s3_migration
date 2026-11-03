@@ -88,6 +88,13 @@ RSpec.describe S3Migration::Quarantine do
       expect(File.exist?(disk_path)).to be true
     end
 
+    it 'leaves the file when its file set was deleted after migration' do
+      allow(Hyrax.query_service).to receive(:find_by).with(id: 'fm1').and_raise(Valkyrie::Persistence::ObjectNotFoundError)
+
+      expect(build.quarantine).to eq :file_deleted
+      expect(File.exist?(disk_path)).to be true
+    end
+
     context 'when the S3 object has the wrong size' do
       let(:s3_file) { double('s3_file', size: 1) }
 

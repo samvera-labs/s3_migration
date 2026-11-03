@@ -221,6 +221,14 @@ RSpec.describe S3Migration::Tasks do
       expect(output).not_to include("#{label} fs3")
     end
 
+    it 'names the entries whose file set was deleted after migration' do
+      statuses['fs3'] = :file_deleted
+
+      tasks.public_send(action)
+
+      expect(output).to include('FILE_DELETED fs3 - file set deleted after migration; skipped', 'file_deleted: 1')
+    end
+
     it 'reports an error and carries on' do
       allow(S3Migration::Quarantine).to receive(:new).and_raise('boom')
 
