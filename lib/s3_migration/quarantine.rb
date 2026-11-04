@@ -71,11 +71,10 @@ module S3Migration
 
     # Puts the disk copy and the original identifier back, then removes the S3 upload and manifest entry
     # nothing refers to any more. The disk copy is checked against the manifest first.
-    # @return [Symbol] :rolled_back, :skipped, :disk_copy_gone, :disk_copy_mismatch or :outside_base
+    # @return [Symbol] :rolled_back, :skipped, :file_deleted, :disk_copy_gone, :disk_copy_mismatch or :outside_base
     def rollback
-      return :outside_base unless path
-      return :skipped unless current_identifier == entry[:new_id]
-      return :disk_copy_gone unless File.exist?(path) || File.exist?(destination)
+      early = rollback_blocker
+      return early if early
       return :disk_copy_mismatch unless disk_copy_matches_manifest?
 
       restore if apply
@@ -96,6 +95,14 @@ module S3Migration
 
     def destination
       self.class.quarantine_path(entry, base)
+    end
+
+    def rollback_blocker
+      return :outside_base unless path
+      return :file_deleted unless current
+      return :skipped unless current_identifier == entry[:new_id]
+
+      :disk_copy_gone unless File.exist?(path) || File.exist?(destination)
     end
 
     def missing_disk_copy_status

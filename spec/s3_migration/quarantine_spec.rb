@@ -206,6 +206,13 @@ RSpec.describe S3Migration::Quarantine do
       expect(build.rollback).to eq :skipped
     end
 
+    it 'reports a file set deleted after migration, leaving the quarantined copy' do
+      allow(Hyrax.query_service).to receive(:find_by).with(id: 'fm1').and_raise(Valkyrie::Persistence::ObjectNotFoundError)
+
+      expect(build.rollback).to eq :file_deleted
+      expect(File.exist?(quarantined_path)).to be true
+    end
+
     it 'reports when the disk copy is gone' do
       FileUtils.rm(quarantined_path)
 
