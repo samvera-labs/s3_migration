@@ -1,19 +1,20 @@
 # frozen_string_literal: true
 
 RSpec.describe S3Migration::MigrateFilesJob do
+  let(:base) { '/data/files' }
   let(:file_sets) { %w[disk1 shrine disk2 none disk3].map { |id| double(id, id: Valkyrie::ID.new(id)) } }
   let(:originals) do
     {
-      'disk1' => double(file_identifier: Valkyrie::ID.new('disk:///a')),
+      'disk1' => double(file_identifier: Valkyrie::ID.new("disk://#{base}/a")),
       'shrine' => double(file_identifier: Valkyrie::ID.new('shrine://x/y')),
-      'disk2' => double(file_identifier: Valkyrie::ID.new('disk:///b')),
+      'disk2' => double(file_identifier: Valkyrie::ID.new("disk://#{base}/b")),
       'none' => nil,
-      'disk3' => double(file_identifier: Valkyrie::ID.new('disk:///c'))
+      'disk3' => double(file_identifier: Valkyrie::ID.new("disk://#{base}/c"))
     }
   end
 
   before do
-    allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: '/'))
+    allow(S3Migration::SourceStorage).to receive(:adapter).and_return(Valkyrie::Storage::Disk.new(base_path: base))
     allow(S3Migration).to receive(:each_file_set) { |&block| file_sets.each(&block) }
     allow(S3Migration).to receive(:find_original_file) { |file_set:| originals[file_set.id.to_s] }
     allow(S3Migration::MigrateFileSetJob).to receive(:perform_later)

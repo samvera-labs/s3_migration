@@ -25,18 +25,27 @@ module S3Migration
     attr_reader :original, :storage
 
     def size_problems(s3_file)
-      recorded = original.recorded_size.first
-      return [] unless recorded && s3_file.size.to_i != recorded.to_i
+      recorded = Array(original.recorded_size)
+      return [] if recorded.empty? || recorded.any? { |size| size.to_i == s3_file.size.to_i }
 
-      ["size #{s3_file.size} != recorded #{recorded}"]
+      ["size #{s3_file.size} != recorded #{recorded.join(' or ')}"]
     end
 
     def checksum_problems(s3_file)
-      stored = StoredChecksum.for(original)
-      return [] unless stored
+      stored = StoredChecksum.all(original)
+      return [] if stored.empty?
 
-      actual = s3_file.checksum(digests: [stored.digest_class.new]).first
-      actual == stored.digest ? [] : ["#{stored.algorithm} #{actual} != stored #{stored.digest}"]
+      actual = s3_digests(s3_file, stored)
+      return [] if stored.any? { |checksum| actual[checksum.algorithm] == checksum.digest }
+
+      stored.map { |checksum| "#{checksum.algorithm} #{actual[checksum.algorithm]} != stored #{checksum.digest}" }
+    end
+
+    # @return [Hash{String=>String}] the S3 object's digest for each algorithm the stored checksums use
+    def s3_digests(s3_file, stored)
+      algorithms = stored.map(&:algorithm).uniq
+      digests = algorithms.map { |algorithm| StoredChecksum::ALGORITHMS.fetch(algorithm).first.new }
+      algorithms.zip(s3_file.checksum(digests:)).to_h
     end
   end
 end

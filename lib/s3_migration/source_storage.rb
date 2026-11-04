@@ -30,11 +30,15 @@ module S3Migration
 
       # @param identifier [#to_s] a file identifier
       def handles?(identifier)
-        adapter.handles?(id: Valkyrie::ID.new(identifier.to_s))
+        adapter.handles?(id: Valkyrie::ID.new(identifier.to_s)) && !path_for(identifier).nil?
       end
 
+      # @return [String, nil] nil when the identifier is outside the adapter's base path, which Valkyrie 3.6.2+
+      #   refuses (FileNotFound)
       def path_for(identifier)
         adapter.file_path(identifier)
+      rescue Valkyrie::StorageAdapter::FileNotFound
+        nil
       end
 
       def base_path

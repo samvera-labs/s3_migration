@@ -28,7 +28,7 @@ module S3Migration
 
     def self.disk_path(entry, base)
       candidate = SourceStorage.path_for(entry[:old_id])
-      candidate if candidate.start_with?("#{base}/")
+      candidate if candidate&.start_with?("#{base}/")
     end
 
     def self.quarantine_path(entry, base)
@@ -57,10 +57,11 @@ module S3Migration
     end
 
     # @return [Symbol] :quarantined, :already_quarantined, :disk_copy_missing, :outside_base,
-    #   :database_changed or :s3_mismatch
+    #   :file_deleted (the file set was deleted after migration), :database_changed or :s3_mismatch
     def quarantine
       return :outside_base unless path
-      return (File.exist?(destination) ? :already_quarantined : :disk_copy_missing) unless File.exist?(path)
+      return missing_disk_copy_status unless File.exist?(path)
+      return :file_deleted unless current
       return :database_changed unless current_identifier == entry[:new_id]
       return :s3_mismatch unless s3_matches_manifest?
 
@@ -70,11 +71,10 @@ module S3Migration
 
     # Puts the disk copy and the original identifier back, then removes the S3 upload and manifest entry
     # nothing refers to any more. The disk copy is checked against the manifest first.
-    # @return [Symbol] :rolled_back, :skipped, :disk_copy_gone, :disk_copy_mismatch or :outside_base
+    # @return [Symbol] :rolled_back, :skipped, :file_deleted, :disk_copy_gone, :disk_copy_mismatch or :outside_base
     def rollback
-      return :outside_base unless path
-      return :skipped unless current_identifier == entry[:new_id]
-      return :disk_copy_gone unless File.exist?(path) || File.exist?(destination)
+      early = rollback_blocker
+      return early if early
       return :disk_copy_mismatch unless disk_copy_matches_manifest?
 
       restore if apply
@@ -97,12 +97,30 @@ module S3Migration
       self.class.quarantine_path(entry, base)
     end
 
+    def rollback_blocker
+      return :outside_base unless path
+      return :file_deleted unless current
+      return :skipped unless current_identifier == entry[:new_id]
+
+      :disk_copy_gone unless File.exist?(path) || File.exist?(destination)
+    end
+
+    def missing_disk_copy_status
+      File.exist?(destination) ? :already_quarantined : :disk_copy_missing
+    end
+
     def current
-      @current ||= S3Migration.find_resource(entry[:file_metadata_id])
+      return @current if defined?(@current)
+
+      @current = begin
+        S3Migration.find_resource(entry[:file_metadata_id])
+      rescue Valkyrie::Persistence::ObjectNotFoundError
+        nil
+      end
     end
 
     def current_identifier
-      current.file_identifier.to_s
+      current&.file_identifier.to_s
     end
 
     def s3_matches_manifest?

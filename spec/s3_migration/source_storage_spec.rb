@@ -50,6 +50,13 @@ RSpec.describe S3Migration::SourceStorage do
       expect(described_class.handles?('shrine://bucket/key')).to be false
     end
 
+    it 'has no path for an identifier the adapter refuses as outside its base path' do
+      allow(disk).to receive(:file_path).and_raise(Valkyrie::StorageAdapter::FileNotFound)
+
+      expect(described_class.path_for('disk:///elsewhere/file.png')).to be_nil
+      expect(described_class.handles?('disk:///elsewhere/file.png')).to be false
+    end
+
     it 'maps an identifier to its path and exposes the base path' do
       expect(described_class.path_for('disk:///data/files/a.png')).to eq '/data/files/a.png'
       expect(described_class.base_path).to eq '/data/files'

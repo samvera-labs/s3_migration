@@ -147,7 +147,10 @@ module S3Migration
     def audit_counted?(counts, file_set, original)
       result = Auditor.new(original:).call
       counts[result.status] += 1
-      return false if result.status == :not_in_s3
+      if result.status == :not_in_s3
+        out.puts "  NOT_IN_S3 #{file_set.id}"
+        return false
+      end
 
       out.puts "  PROBLEM #{file_set.id} - #{result.problems.join('; ')}" if result.status == :problem
       true
@@ -177,10 +180,15 @@ module S3Migration
       status = Quarantine.new(entry, apply: flag('APPLY'),
                                      verify_sha: flag('VERIFY_SHA', default: 'true')).public_send(action)
       counts[status] += 1
-      out.puts "  #{label} #{entry[:file_set_id]}" if ACTED_ON.include?(status)
+      print_outcome(status, entry[:file_set_id], label)
     rescue StandardError => e
       counts[:error] += 1
       out.puts "  ERROR #{entry[:file_set_id]} - #{e.class}: #{e.message}"
+    end
+
+    def print_outcome(status, file_set_id, label)
+      out.puts "  #{label} #{file_set_id}" if ACTED_ON.include?(status)
+      out.puts "  FILE_DELETED #{file_set_id} - file set deleted after migration; skipped" if status == :file_deleted
     end
   end
 end

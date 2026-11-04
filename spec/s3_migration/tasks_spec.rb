@@ -165,6 +165,7 @@ RSpec.describe S3Migration::Tasks do
       tasks.verify
 
       expect(output).to include('PROBLEM fs1 - size differs; no object', 'PROBLEM fs1 - RuntimeError: boom',
+                                'NOT_IN_S3 fs1',
                                 'OK: 1  Problems: 2  Not yet in S3: 1  No original: 0')
     end
   end
@@ -218,6 +219,14 @@ RSpec.describe S3Migration::Tasks do
 
       expect(output).to include("#{label} fs1", "#{label} fs2", 'quarantined: 1  rolled_back: 1  skipped: 1')
       expect(output).not_to include("#{label} fs3")
+    end
+
+    it 'names the entries whose file set was deleted after migration' do
+      statuses['fs3'] = :file_deleted
+
+      tasks.public_send(action)
+
+      expect(output).to include('FILE_DELETED fs3 - file set deleted after migration; skipped', 'file_deleted: 1')
     end
 
     it 'reports an error and carries on' do

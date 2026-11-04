@@ -124,6 +124,17 @@ RSpec.describe S3Migration do
 
       expect(progress).to have_received(:tick).exactly(4).times
     end
+
+    it 'ticks after a file set is handled, so a progress line counts it' do
+      handled = []
+      handled_before_tick = []
+      progress = instance_double(S3Migration::Progress)
+      allow(progress).to receive(:tick) { handled << handled_before_tick.dup }
+
+      described_class.each_original(progress:) { |file_set, _| handled_before_tick << file_set.id.to_s }
+
+      expect(handled.first).to eq %w[a]
+    end
   end
 
   describe 'lookups that skip Wings' do

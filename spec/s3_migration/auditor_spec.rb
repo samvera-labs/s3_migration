@@ -26,6 +26,35 @@ RSpec.describe S3Migration::Auditor do
     it { expect(result.status).to eq :not_in_s3 }
   end
 
+  context 'when the stored checksums list an older one first' do
+    let(:checksum) { [Digest::MD5.hexdigest('older version'), Digest::MD5.hexdigest(content)] }
+
+    it { expect(result.status).to eq :ok }
+  end
+
+  context 'when none of several stored checksums match' do
+    let(:checksum) { [Digest::MD5.hexdigest('one'), Digest::MD5.hexdigest('two')] }
+
+    it 'reports each stored checksum' do
+      expect(result.status).to eq :problem
+      expect(result.problems.size).to eq 2
+    end
+  end
+
+  context 'when the size matches a later recorded size' do
+    let(:recorded_size) { [content.bytesize + 100, content.bytesize] }
+
+    it { expect(result.status).to eq :ok }
+  end
+
+  context 'when the size differs from every recorded size' do
+    let(:recorded_size) { [content.bytesize + 1, content.bytesize + 2] }
+
+    it 'lists the recorded sizes' do
+      expect(result.problems.first).to include("#{content.bytesize + 1} or #{content.bytesize + 2}")
+    end
+  end
+
   context 'when the size differs' do
     let(:recorded_size) { [content.bytesize + 1] }
 
